@@ -1,5 +1,5 @@
 import React from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useLocation, Link } from 'react-router-dom';
 import ProductCard from '../components/ProductCard';
 import { useStore } from '../hooks/useStore';
 import { CATEGORIES } from '../constants';
@@ -7,34 +7,48 @@ import { CATEGORIES } from '../constants';
 const CategoryPage: React.FC = () => {
     const { category } = useParams<{ category: string }>();
     const { products } = useStore();
+    const location = useLocation();
+
+    const queryParams = new URLSearchParams(location.search);
+    const selectedSubcategory = queryParams.get('subcategory') || 'All';
     
     const categoryName = category ? category.charAt(0).toUpperCase() + category.slice(1) : '';
-    const subcategories = CATEGORIES[categoryName as keyof typeof CATEGORIES] || [];
+    
+    let subcategories: string[] = [];
+    let parentCategory: string | undefined;
 
-    const [selectedSubcategory, setSelectedSubcategory] = React.useState<string>('All');
-
-    const filteredProducts = products.filter(p => 
-        p.category.toLowerCase() === category &&
-        (selectedSubcategory === 'All' || p.subcategory === selectedSubcategory)
-    );
+    if (categoryName === 'Ladies') {
+        subcategories = CATEGORIES.Ladies;
+        parentCategory = 'Ladies';
+    } else if (categoryName === 'Boys' || categoryName === 'Girls') {
+        subcategories = CATEGORIES.Kids[categoryName as keyof typeof CATEGORIES.Kids];
+        parentCategory = categoryName;
+    }
+    
+    const filteredProducts = products.filter(p => {
+        const pCat = p.category.toLowerCase();
+        const mainCatMatch = parentCategory?.toLowerCase() === pCat;
+        const subCatMatch = selectedSubcategory === 'All' || p.subcategory === selectedSubcategory;
+        return mainCatMatch && subCatMatch;
+    });
 
     return (
         <div>
             <h1 className="text-4xl font-serif font-bold text-brand-text mb-4">{categoryName} Collection</h1>
             
             <div className="flex items-center space-x-4 mb-8 overflow-x-auto pb-2">
-                <button 
-                    onClick={() => setSelectedSubcategory('All')} 
+                <Link 
+                    to={`/category/${category?.toLowerCase()}`}
                     className={`px-4 py-2 rounded-full text-sm font-semibold transition ${selectedSubcategory === 'All' ? 'bg-brand-text text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
                     All
-                </button>
+                </Link>
                 {subcategories.map(sub => (
-                     <button 
+                     <Link
                         key={sub}
-                        onClick={() => setSelectedSubcategory(sub)}
+                        to={`/category/${category?.toLowerCase()}?subcategory=${encodeURIComponent(sub)}`}
                         className={`px-4 py-2 rounded-full text-sm font-semibold transition whitespace-nowrap ${selectedSubcategory === sub ? 'bg-brand-text text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
                         {sub}
-                    </button>
+                    </Link>
                 ))}
             </div>
 

@@ -73,19 +73,37 @@ export interface Order {
   createdAt: Date;
 }
 
-export interface Expense {
+export interface Payee {
     id: string;
-    date: Date;
-    description: string;
-    amount: number;
+    name: string;
+    businessTitle: string;
+    paymentPurpose: string;
+    mobile: string;
+    cnic?: string; 
 }
 
-export interface Payment {
+export enum TransactionType {
+    Income = 'Income',
+    Expense = 'Expense',
+}
+
+export enum TransactionMethod {
+    Cash = 'Cash',
+    Bank = 'Bank',
+}
+
+export interface Transaction {
     id: string;
     date: Date;
     description: string;
     amount: number;
+    type: TransactionType;
+    method: TransactionMethod;
+    payeeId?: string;
+    orderId?: string;
+    runningBalance: number;
 }
+
 
 export interface ShopDetails {
     name: string;
@@ -95,10 +113,6 @@ export interface ShopDetails {
     contactMobile: string;
     email: string;
     logo?: string;
-    location?: {
-        lat: number;
-        lng: number;
-    }
 }
 
 export interface BankDetails {
@@ -136,4 +150,22 @@ export interface Notification {
   orderId: string;
   createdAt: Date;
   isRead: boolean;
+}
+
+export interface Payable {
+    id: string;
+    vendor: string;
+    description: string;
+    amount: number;
+    dueDate: Date;
+    status: 'Pending' | 'Paid';
+}
+
+export interface Receivable {
+    id: string;
+    customerName: string;
+    description: string;
+    amount: number;
+    dueDate: Date;
+    status: 'Pending' | 'Paid';
 }

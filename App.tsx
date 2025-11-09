@@ -18,14 +18,8 @@ const SplashScreen: React.FC = () => {
     const { shopDetails } = useStore();
     return (
         <div className="fixed inset-0 bg-brand-pink z-[100] flex flex-col items-center justify-center transition-opacity duration-500">
-            {shopDetails.logo ? (
+            {shopDetails.logo && (
                 <img src={shopDetails.logo} alt={`${shopDetails.name} Logo`} className="w-40 h-40 object-contain" />
-            ) : (
-                <div className="w-40 h-40">
-                    <svg viewBox="0 0 64 48" xmlns="http://www.w3.org/2000/svg" fill="currentColor" className="w-full h-full text-brand-text">
-                      <path d="M21.43,11.39,15.6,22.24h8.86a4.1,4.1,0,1,0,0-8.2H21.43Zm0-3.3H24.46a7.4,7.4,0,0,1,0,14.79H12.91L5,32.41H18.2L28.14,14.6,39.8,32.41H59L50.2,17.13a7.4,7.4,0,0,1-3-14.21H39.8V0H21.43ZM47.2,14.5a4.1,4.1,0,1,0-4.43,4.1H51.5A4.08,4.08,0,0,0,47.2,14.5Z M31.84,48,24,35.11,16.14,48Z" />
-                    </svg>
-                </div>
             )}
             <h1 className="text-4xl font-serif font-bold text-brand-text mt-4">{shopDetails.name}</h1>
         </div>
@@ -55,13 +49,38 @@ const TermsPage: React.FC = () => (
     <div className="bg-white p-8 rounded-lg shadow-md">
         <h1 className="text-4xl font-serif font-bold text-brand-text mb-8 text-center">Terms & Conditions</h1>
         <div className="prose max-w-none text-gray-700">
-            <p>Welcome to Roxy Shoes. By accessing our website and placing an order, you agree to be bound by these terms and conditions.</p>
-            <h2 className="font-serif">1. Orders</h2>
-            <p>All orders are subject to availability and confirmation of the order price. Dispatch times may vary according to availability and any guarantees or representations made as to delivery times are subject to any delays resulting from postal delays or force majeure for which we will not be responsible.</p>
-            <h2 className="font-serif">2. Pricing and Availability</h2>
-            <p>Whilst we try and ensure that all details, descriptions and prices which appear on this Website are accurate, errors may occur. If we discover an error in the price of any goods which you have ordered we will inform you of this as soon as possible and give you the option of reconfirming your order at the correct price or cancelling it.</p>
-            <h2 className="font-serif">3. Payment</h2>
-            <p>We accept Cash on Delivery and Online Payments. For online payments, you must provide proof of payment. Goods will not be dispatched until the funds have cleared.</p>
+            <p>Welcome to Roxy Shoes. By accessing our website and placing an order, you agree to be bound by these terms and conditions. Please read them carefully to understand your rights and obligations.</p>
+            
+            <h2 className="font-serif">1. Order Policy</h2>
+            <p>All orders are subject to product availability and confirmation of the order price. When you place an order, you will receive an acknowledgement e-mail confirming receipt of your order. This email is only an acknowledgement and does not constitute acceptance of your order. A contract between us will not be formed until we send you a separate confirmation by e-mail that the goods you ordered have been dispatched. Only those goods listed in the dispatch confirmation e-mail will be included in the contract formed.</p>
+            
+            <h2 className="font-serif">2. Payment Policy</h2>
+            <p>We accept two primary methods of payment:</p>
+            <ul>
+                <li><strong>Online Bank Transfer:</strong> Payments can be made directly to our designated bank account. After completing the transfer, customers are required to upload a screenshot of the transaction receipt as proof of payment. Your order will not be processed or dispatched until the payment has been confirmed and has cleared in our account.</li>
+                <li><strong>Cash on Delivery (COD):</strong> This option is available for most locations. Please see the specific conditions for COD orders below.</li>
+            </ul>
+
+            <h2 className="font-serif">3. Cash on Delivery (COD) Policy</h2>
+            <p>To ensure a smooth and secure transaction for our delivery personnel, we have a specific procedure for all COD orders:</p>
+            <ul>
+                <li>Once your order is confirmed and ready for dispatch, our delivery rider will contact you to coordinate the delivery time.</li>
+                <li>Before the rider proceeds to your location, the <strong>delivery charges (Rs. 300) must be transferred online</strong> to the account details provided by our team. This is a pre-payment to confirm your order.</li>
+                <li>After we confirm receipt of the delivery charges, the rider will be dispatched with your product.</li>
+                <li>The remaining amount for the product(s) must be paid in cash directly to the rider upon delivery. The rider will not hand over the product without receiving the full remaining payment.</li>
+            </ul>
+            <p>This policy helps us minimize risks associated with COD transactions and confirms the customer's commitment to the order.</p>
+
+            <h2 className="font-serif">4. Refund Policy</h2>
+            <p>We are committed to ensuring our customers are satisfied with their purchases. Refunds are available under the following conditions:</p>
+            <ul>
+                <li><strong>Damaged or Incorrect Product:</strong> If you receive a product that is damaged, defective, or not what you ordered, please contact our customer service within 48 hours of delivery. You must provide photographic evidence of the issue. We will arrange for a return of the product and, upon verification, issue a full refund or a replacement, as per your preference.</li>
+                <li><strong>Change of Mind:</strong> We do not offer refunds or exchanges for "change of mind." We encourage you to review your order carefully before confirming your purchase.</li>
+                <li><strong>Refund Process:</strong> Once a refund is approved, the amount will be credited back to your original payment method within 7-10 business days. For COD orders, refunds will be processed via bank transfer.</li>
+            </ul>
+
+            <h2 className="font-serif">5. Pricing and Availability</h2>
+            <p>While we strive to ensure that all details, descriptions, and prices appearing on this Website are accurate, errors may occur. If we discover an error in the price of any goods which you have ordered, we will inform you of this as soon as possible and give you the option of reconfirming your order at the correct price or cancelling it. If we are unable to contact you, we will treat the order as cancelled.</p>
         </div>
     </div>
 );
@@ -72,9 +91,9 @@ const PrivacyPage: React.FC = () => (
         <div className="prose max-w-none text-gray-700">
             <p>This Privacy Policy describes how your personal information is collected, used, and shared when you visit or make a purchase from our website.</p>
             <h2 className="font-serif">Personal Information We Collect</h2>
-            <p>When you make a purchase or attempt to make a purchase through the Site, we collect certain information from you, including your name, billing address, shipping address, email address, and phone number. We refer to this information as “Order Information.”</p>
+            <p>When you make a purchase or attempt to make a purchase through the Site, we collect certain information from you, including your name, billing address, shipping address, email address, and phone number. When you place an order, we also collect your live geolocation data to facilitate delivery.</p>
             <h2 className="font-serif">How Do We Use Your Personal Information?</h2>
-            <p>We use the Order Information that we collect generally to fulfill any orders placed through the Site (including arranging for shipping, and providing you with invoices and/or order confirmations). Additionally, we use this Order Information to communicate with you and screen our orders for potential risk or fraud.</p>
+            <p>We use the Order Information that we collect generally to fulfill any orders placed through the Site (including arranging for shipping, and providing you with invoices and/or order confirmations). Your geolocation data is used solely for delivery purposes and is shared only with our delivery personnel for the duration of the delivery process. Additionally, we use this Order Information to communicate with you and screen our orders for potential risk or fraud.</p>
             <h2 className="font-serif">Sharing Your Personal Information</h2>
             <p>We do not share your Personal Information with third parties except to comply with applicable laws and regulations, to respond to a subpoena, search warrant or other lawful request for information we receive, or to otherwise protect our rights.</p>
         </div>
@@ -88,7 +107,7 @@ const ContactUsPage: React.FC = () => {
     return (
         <div>
             <h1 className="text-4xl font-serif font-bold text-brand-text mb-8 text-center">Contact Us</h1>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-12 bg-white p-8 rounded-lg shadow-md">
+            <div className="bg-white p-8 rounded-lg shadow-md max-w-2xl mx-auto">
                 <div>
                     <h2 className="text-2xl font-serif font-bold text-brand-text mb-4">{shopDetails.name}</h2>
                     <p className="mb-2">
@@ -106,22 +125,6 @@ const ContactUsPage: React.FC = () => {
                     <p className="mb-2">
                         <strong>Owner:</strong> {shopDetails.owner}
                     </p>
-                </div>
-                <div>
-                    {shopDetails.location ? (
-                         <iframe
-                            src={`https://maps.google.com/maps?q=${shopDetails.location.lat},${shopDetails.location.lng}&hl=es;z=14&amp;output=embed`}
-                            width="100%"
-                            height="350"
-                            style={{ border: 0 }}
-                            allowFullScreen={false}
-                            loading="lazy"
-                            referrerPolicy="no-referrer-when-downgrade"
-                            className="rounded-lg"
-                        ></iframe>
-                    ) : (
-                        <p>Map location not available.</p>
-                    )}
                 </div>
             </div>
         </div>

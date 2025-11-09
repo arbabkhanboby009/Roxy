@@ -104,3 +104,48 @@ export const getStyleRecommendations = async (query: string, products: Product[]
     };
   }
 };
+
+export const generateVideoAd = async (prompt: string, imageBase64: string, imageMimeType: string): Promise<string> => {
+    // Re-instantiate to get latest API key from the selection dialog
+    const currentApiKey = process.env.API_KEY;
+    if (!currentApiKey) {
+        throw new Error("API Key is not configured. Please select an API key.");
+    }
+
+    try {
+        const videoAI = new GoogleGenAI({ apiKey: currentApiKey });
+        let operation = await videoAI.models.generateVideos({
+            model: 'veo-3.1-fast-generate-preview',
+            prompt: prompt,
+            image: {
+                imageBytes: imageBase64,
+                mimeType: imageMimeType,
+            },
+            config: {
+                numberOfVideos: 1,
+                resolution: '720p',
+                aspectRatio: '9:16', // Good for social media stories/reels
+                durationSecs: 5,
+            }
+        });
+
+        while (!operation.done) {
+            await new Promise(resolve => setTimeout(resolve, 10000)); // Poll every 10 seconds
+            operation = await videoAI.operations.getVideosOperation({ operation: operation });
+        }
+
+        const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
+        if (!downloadLink) {
+            throw new Error("Video generation completed, but no download link was found.");
+        }
+        
+        // The URL needs the API key to be fetched
+        return `${downloadLink}&key=${currentApiKey}`;
+    } catch (error) {
+        console.error("Error generating video ad:", error);
+        if (error instanceof Error && error.message.includes("Requested entity was not found")) {
+             throw new Error("Your API Key seems invalid or lacks permissions for the Veo model. Please re-select your API key and try again.");
+        }
+        throw new Error("Failed to generate video. The model may be unavailable or the request could not be processed. Please try again later.");
+    }
+};

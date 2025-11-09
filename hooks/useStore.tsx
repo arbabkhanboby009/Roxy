@@ -1,14 +1,16 @@
-import React, { createContext, useContext, useState } from 'react';
-import type { Product, CartItem, Order, Customer, Expense, Payment, ShopDetails, BankDetails, WalletDetails, User, ProductVariant, Review, Notification } from '../types';
-import { OrderStatus, PaymentMethod, OrderType } from '../types';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import type { Product, CartItem, Order, Customer, ShopDetails, BankDetails, WalletDetails, User, ProductVariant, Review, Notification, Payable, Receivable, Transaction, Payee } from '../types';
+import { OrderStatus, PaymentMethod, OrderType, TransactionType, TransactionMethod } from '../types';
 import { MOCK_PRODUCTS } from '../constants';
 
 interface StoreContextType {
   products: Product[];
   cart: CartItem[];
   orders: Order[];
-  expenses: Expense[];
-  payments: Payment[];
+  transactions: Transaction[];
+  payees: Payee[];
+  payables: Payable[];
+  receivables: Receivable[];
   shopDetails: ShopDetails;
   bankDetails: BankDetails[];
   walletDetails: WalletDetails[];
@@ -26,9 +28,8 @@ interface StoreContextType {
   updateProduct: (updatedProduct: Product) => void;
   deleteProduct: (productId: string) => void;
   updateOrderStatus: (orderId: string, status: OrderStatus) => void;
-  addExpense: (description: string, amount: number) => void;
-  addPayment: (description: string, amount: number) => void;
-  addPaymentForOrder: (order: Order, remarks: string) => void;
+  addTransaction: (txData: Omit<Transaction, 'id' | 'date' | 'runningBalance'>) => void;
+  addPayee: (payeeData: Omit<Payee, 'id'>) => Payee;
   addShopOrder: (order: Omit<Order, 'id' | 'type' | 'createdAt'>) => void;
   updateShopDetails: (details: ShopDetails) => void;
   addBankDetails: (details: Omit<BankDetails, 'id'>) => void;
@@ -39,34 +40,52 @@ interface StoreContextType {
   addNotification: (message: string, orderId: string) => void;
   markNotificationAsRead: (notificationId: string) => void;
   markAllNotificationsAsRead: () => void;
+  addPayable: (payable: Omit<Payable, 'id' | 'status'>) => void;
+  updatePayableStatus: (payableId: string, method: TransactionMethod) => void;
+  addReceivable: (receivable: Omit<Receivable, 'id' | 'status'>) => void;
+  updateReceivableStatus: (receivableId: string, method: TransactionMethod) => void;
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
+
+const defaultShopDetails: ShopDetails = {
+    name: 'Roxy Shoes',
+    owner: '',
+    address: '',
+    contactPerson: '',
+    contactMobile: '',
+    email: '',
+    logo: undefined,
+};
 
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [payments, setPayments] = useState<Payment[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [payees, setPayees] = useState<Payee[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [payables, setPayables] = useState<Payable[]>([]);
+  const [receivables, setReceivables] = useState<Receivable[]>([]);
 
-  const [shopDetails, setShopDetails] = useState<ShopDetails>({
-      name: 'Roxy Shoes',
-      owner: '',
-      address: '',
-      contactPerson: '',
-      contactMobile: '',
-      email: '',
+  const [shopDetails, setShopDetails] = useState<ShopDetails>(() => {
+    try {
+        const savedDetails = localStorage.getItem('shopDetails');
+        return savedDetails ? JSON.parse(savedDetails) : defaultShopDetails;
+    } catch (error) {
+        console.error("Failed to parse shop details from localStorage", error);
+        return defaultShopDetails;
+    }
   });
+
   const [bankDetails, setBankDetails] = useState<BankDetails[]>([]);
   const [walletDetails, setWalletDetails] = useState<WalletDetails[]>([]);
   const [users, setUsers] = useState<User[]>([
       { id: 'user-1', name: 'Admin', role: 'Admin' },
   ]);
   const [currentUser, setCurrentUser] = useState<User | null>(users[0]);
-  const [counters, setCounters] = useState({ product: products.length, order: 0, shopOrder: 0, review: reviews.length, notification: 0 });
+  const [counters, setCounters] = useState({ product: products.length, order: 0, shopOrder: 0, review: reviews.length, notification: 0, payable: 0, receivable: 0 });
 
   const addNotification = (message: string, orderId: string) => {
     const newNotification: Notification = {
@@ -171,16 +190,50 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setCounters(p => ({...p, order: p.order + 1}));
     setOrders(prev => [...prev, newOrder]);
     
-    // Decrease stock
     cart.forEach(item => {
         updateStock(item.id, item.selectedColor, item.selectedSize, -item.quantity);
     });
     
-    addNotification(`Your order #${newOrder.id} has been placed successfully!`, newOrder.id);
+    const locationInfo = customer.location ? `Customer location: https://www.google.com/maps?q=${customer.location.lat},${customer.location.lng}` : 'Customer location not provided.';
+    console.log(`SIMULATING EMAIL: Order confirmation for #${newOrder.id} to ${customer.email} and admin.`);
+    console.log(`ADMIN EMAIL CONTENT: New order received. ${locationInfo}`);
+    addNotification(`Your order #${newOrder.id} has been placed!`, newOrder.id);
+    addNotification(`New online order #${newOrder.id} received. Location captured.`, newOrder.id);
 
     clearCart();
     return newOrder;
   };
+
+    const addTransaction = (txData: Omit<Transaction, 'id' | 'date' | 'runningBalance'>) => {
+        setTransactions(prev => {
+            const lastTransaction = prev.length > 0 ? prev[prev.length - 1] : null;
+            const lastBalance = lastTransaction?.runningBalance || 0;
+            
+            const amountChange = txData.method === TransactionMethod.Cash 
+                ? (txData.type === TransactionType.Income ? txData.amount : -txData.amount)
+                : 0;
+                
+            const newBalance = lastBalance + amountChange;
+
+            const newTransaction: Transaction = {
+                ...txData,
+                id: `txn-${Date.now()}`,
+                date: new Date(),
+                runningBalance: newBalance,
+            };
+            return [...prev, newTransaction];
+        });
+    };
+
+    const addPayee = (payeeData: Omit<Payee, 'id'>): Payee => {
+        const newPayee: Payee = {
+            ...payeeData,
+            id: `payee-${Date.now()}`
+        };
+        setPayees(prev => [...prev, newPayee]);
+        return newPayee;
+    };
+
 
   const addShopOrder = (orderData: Omit<Order, 'id' | 'type' | 'createdAt'>) => {
       const newOrder: Order = {
@@ -193,7 +246,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setOrders(prev => [...prev, newOrder]);
       orderData.items.forEach(item => {
         updateStock(item.id, item.selectedColor, item.selectedSize, -item.quantity);
-    });
+      });
+      addTransaction({
+        description: `Payment for In-Shop Order #${newOrder.id}`,
+        amount: newOrder.grandTotal,
+        type: TransactionType.Income,
+        method: TransactionMethod.Cash,
+        orderId: newOrder.id,
+      });
   };
 
   const addProduct = (productData: Omit<Product, 'id' | 'addedDate'>) => {
@@ -213,39 +273,29 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const updateOrderStatus = (orderId: string, status: OrderStatus) => {
     setOrders(prev => prev.map(o => {
         if (o.id === orderId) {
-            // If order was cancelled, restore stock
             if (o.status !== OrderStatus.Cancelled && status === OrderStatus.Cancelled) {
                  o.items.forEach(item => updateStock(item.id, item.selectedColor, item.selectedSize, item.quantity));
             } else if (o.status === OrderStatus.Cancelled && status !== OrderStatus.Cancelled) {
-                 // If moving from cancelled back to an active state, decrease stock again
                  o.items.forEach(item => updateStock(item.id, item.selectedColor, item.selectedSize, -item.quantity));
             }
-            
             if (o.status !== status) {
                  addNotification(`Your order #${o.id} has been updated to: ${status}.`, o.id);
             }
-
             return {...o, status};
         }
         return o;
     }));
   };
 
-  const addExpense = (description: string, amount: number) => {
-    const newExpense: Expense = { id: `exp-${Date.now()}`, date: new Date(), description, amount };
-    setExpenses(prev => [...prev, newExpense]);
+  const updateShopDetails = (details: ShopDetails) => {
+    setShopDetails(details);
+    try {
+        localStorage.setItem('shopDetails', JSON.stringify(details));
+    } catch (error) {
+        console.error("Failed to save shop details to localStorage", error);
+    }
   };
 
-  const addPayment = (description: string, amount: number) => {
-    const newPayment: Payment = { id: `pay-${Date.now()}`, date: new Date(), description, amount };
-    setPayments(prev => [...prev, newPayment]);
-  };
-
-  const addPaymentForOrder = (order: Order, remarks: string) => {
-    addPayment(`Payment for Order #${order.id}. ${remarks}`, order.grandTotal);
-  };
-
-  const updateShopDetails = (details: ShopDetails) => setShopDetails(details);
   const addBankDetails = (details: Omit<BankDetails, 'id'>) => setBankDetails(p => [...p, { ...details, id: `bank-${Date.now()}` }]);
   const deleteBankDetails = (id: string) => setBankDetails(p => p.filter(d => d.id !== id));
   const addWalletDetails = (details: Omit<WalletDetails, 'id'>) => setWalletDetails(p => [...p, { ...details, id: `wallet-${Date.now()}` }]);
@@ -262,8 +312,58 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setReviews(prev => [newReview, ...prev]);
   };
 
+  const addPayable = (payable: Omit<Payable, 'id' | 'status'>) => {
+    const newPayable: Payable = {
+        ...payable,
+        id: `payable-${counters.payable + 1}`,
+        status: 'Pending',
+    };
+    setCounters(p => ({...p, payable: p.payable + 1}));
+    setPayables(prev => [newPayable, ...prev]);
+  };
+
+    const updatePayableStatus = (payableId: string, method: TransactionMethod) => {
+      setPayables(prev => prev.map(p => {
+          if (p.id === payableId && p.status === 'Pending') {
+              addTransaction({
+                  description: `Paid: ${p.vendor} - ${p.description}`,
+                  amount: p.amount,
+                  type: TransactionType.Expense,
+                  method: method
+              });
+              return { ...p, status: 'Paid' };
+          }
+          return p;
+      }));
+  };
+
+  const addReceivable = (receivable: Omit<Receivable, 'id' | 'status'>) => {
+    const newReceivable: Receivable = {
+        ...receivable,
+        id: `receivable-${counters.receivable + 1}`,
+        status: 'Pending',
+    };
+    setCounters(p => ({...p, receivable: p.receivable + 1}));
+    setReceivables(prev => [newReceivable, ...prev]);
+  };
+
+  const updateReceivableStatus = (receivableId: string, method: TransactionMethod) => {
+      setReceivables(prev => prev.map(r => {
+          if (r.id === receivableId && r.status === 'Pending') {
+              addTransaction({
+                  description: `Received from: ${r.customerName} - ${r.description}`,
+                  amount: r.amount,
+                  type: TransactionType.Income,
+                  method: method
+              });
+              return { ...r, status: 'Paid' };
+          }
+          return r;
+      }));
+  };
+
   return (
-    <StoreContext.Provider value={{ products, cart, orders, expenses, payments, shopDetails, bankDetails, walletDetails, users, currentUser, reviews, notifications, addToCart, removeFromCart, updateCartQuantity, clearCart, getCartTotal, placeOrder, addProduct, updateProduct, deleteProduct, updateOrderStatus, addExpense, addPayment, addPaymentForOrder, addShopOrder, updateShopDetails, addBankDetails, deleteBankDetails, addWalletDetails, deleteWalletDetails, addReview, addNotification, markNotificationAsRead, markAllNotificationsAsRead }}>
+    <StoreContext.Provider value={{ products, cart, orders, transactions, payees, payables, receivables, shopDetails, bankDetails, walletDetails, users, currentUser, reviews, notifications, addToCart, removeFromCart, updateCartQuantity, clearCart, getCartTotal, placeOrder, addProduct, updateProduct, deleteProduct, updateOrderStatus, addTransaction, addPayee, addShopOrder, updateShopDetails, addBankDetails, deleteBankDetails, addWalletDetails, deleteWalletDetails, addReview, addNotification, markNotificationAsRead, markAllNotificationsAsRead, addPayable, updatePayableStatus, addReceivable, updateReceivableStatus }}>
       {children}
     </StoreContext.Provider>
   );

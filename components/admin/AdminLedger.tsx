@@ -1,117 +1,301 @@
-
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useStore } from '../../hooks/useStore';
 import Icon from '../Icon';
-import type { BankDetails, WalletDetails } from '../../types';
+import type { Payee, Transaction } from '../../types';
+import { TransactionType, TransactionMethod } from '../../types';
+
+const PrintableLedger: React.FC<{ transactions: any[], cashInHand: number, onClose: () => void }> = ({ transactions, cashInHand, onClose }) => {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 z-[100] flex justify-center items-center p-4 print:p-0 print:bg-white">
+            <style>{`
+                @media print { body * { visibility: hidden; } .printable-ledger, .printable-ledger * { visibility: visible; } .printable-ledger { position: absolute; left: 0; top: 0; width: 100%; height: auto; } .no-print { display: none; } }
+            `}</style>
+            <div className="printable-ledger bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+                <div className="p-8 overflow-y-auto">
+                    <h1 className="text-3xl font-bold text-center mb-2">General Ledger</h1>
+                    <p className="text-center text-gray-500 mb-8">Roxy Shoes</p>
+                    <table className="w-full text-sm text-left text-gray-500">
+                         <thead className="text-xs text-gray-700 uppercase bg-gray-50">
+                            <tr>
+                                <th className="px-4 py-3">Date</th>
+                                <th className="px-4 py-3">Description</th>
+                                <th className="px-4 py-3 text-right">Income</th>
+                                <th className="px-4 py-3 text-right">Expense</th>
+                                <th className="px-4 py-3 text-right">Balance</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {transactions.map((t, i) => (
+                                <tr key={i} className="bg-white border-b">
+                                    <td className="px-4 py-2">{t.date.toLocaleDateString()}</td>
+                                    <td className="px-4 py-2">{t.description}</td>
+                                    <td className="px-4 py-2 text-right text-green-600">{t.type === TransactionType.Income ? `PKR ${t.amount.toLocaleString()}` : '-'}</td>
+                                    <td className="px-4 py-2 text-right text-red-600">{t.type === TransactionType.Expense ? `PKR ${t.amount.toLocaleString()}` : '-'}</td>
+                                    <td className="px-4 py-2 text-right font-semibold">PKR {t.runningBalance.toLocaleString()}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                        <tfoot>
+                            <tr className="font-bold bg-gray-50">
+                                <td colSpan={4} className="px-4 py-3 text-right">Final Cash in Hand:</td>
+                                <td className="px-4 py-3 text-right">PKR {cashInHand.toLocaleString()}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                <div className="no-print p-4 bg-gray-100 border-t flex justify-end gap-4">
+                    <button onClick={onClose} className="py-2 px-4 rounded-lg bg-gray-300">Close</button>
+                    <button onClick={() => window.print()} className="py-2 px-4 rounded-lg bg-blue-600 text-white">Print PDF</button>
+                </div>
+            </div>
+      </div>
+    );
+};
+
 
 const AdminFinance: React.FC = () => {
-    const { orders, expenses, payments, addExpense, addPayment, bankDetails, walletDetails, addBankDetails, deleteBankDetails, addWalletDetails, deleteWalletDetails } = useStore();
-    const [expenseDesc, setExpenseDesc] = useState('');
-    const [expenseAmount, setExpenseAmount] = useState('');
-    const [paymentDesc, setPaymentDesc] = useState('');
-    const [paymentAmount, setPaymentAmount] = useState('');
+    const { transactions, payees, addTransaction, addPayee } = useStore();
+    const [modal, setModal] = useState<'addPayment' | 'addExpense' | 'addPayee' | 'viewPayee' | 'generateLedger' | null>(null);
+    const [currentPayee, setCurrentPayee] = useState<Payee | null>(null);
 
-    const [newBank, setNewBank] = useState<Omit<BankDetails, 'id'>>({ bankName: '', accountTitle: '', accountNumber: '' });
-    const [newWallet, setNewWallet] = useState<Omit<WalletDetails, 'id'>>({ walletName: '', accountTitle: '', walletNumber: '' });
+    const [newTx, setNewTx] = useState({ description: '', amount: 0, method: TransactionMethod.Cash, payeeId: '' });
+    const [newPayee, setNewPayee] = useState<Omit<Payee, 'id'>>({ name: '', businessTitle: '', paymentPurpose: '', mobile: '', cnic: '' });
 
-    const totalIncome = payments.reduce((sum, payment) => sum + payment.amount, 0);
-    const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
-    const netProfit = totalIncome - totalExpenses;
+    const [filter, setFilter] = useState('All');
+    const [sort, setSort] = useState({ key: 'date', direction: 'desc' });
+    const [searchTerm, setSearchTerm] = useState('');
 
-    const handleAddExpense = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (expenseDesc && expenseAmount) {
-            addExpense(expenseDesc, parseFloat(expenseAmount));
-            setExpenseDesc('');
-            setExpenseAmount('');
+    const cashInHand = transactions.length > 0 ? transactions[transactions.length - 1].runningBalance : 0;
+    const totalIncome = transactions.filter(t => t.type === TransactionType.Income).reduce((sum, t) => sum + t.amount, 0);
+    const totalExpense = transactions.filter(t => t.type === TransactionType.Expense).reduce((sum, t) => sum + t.amount, 0);
+
+    const filteredTransactions = useMemo(() => {
+        let txs = [...transactions];
+        if (filter !== 'All') txs = txs.filter(t => t.type === filter);
+        if (searchTerm) txs = txs.filter(t => t.description.toLowerCase().includes(searchTerm.toLowerCase()) || t.id.toLowerCase().includes(searchTerm.toLowerCase()));
+        
+        txs.sort((a,b) => {
+            const valA = sort.key === 'date' ? a.date.getTime() : a.amount;
+            const valB = sort.key === 'date' ? b.date.getTime() : b.amount;
+            return sort.direction === 'asc' ? valA - valB : valB - valA;
+        });
+
+        return txs;
+    }, [transactions, filter, sort, searchTerm]);
+
+    const handleAddTransaction = (type: TransactionType) => {
+        if (!newTx.description || newTx.amount <= 0) {
+            alert("Please provide a valid description and amount.");
+            return;
         }
+        addTransaction({ ...newTx, type });
+        setNewTx({ description: '', amount: 0, method: TransactionMethod.Cash, payeeId: '' });
+        setModal(null);
     };
 
-    const handleAddPayment = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (paymentDesc && paymentAmount) {
-            addPayment(paymentDesc, parseFloat(paymentAmount));
-            setPaymentDesc('');
-            setPaymentAmount('');
+    const handleAddPayee = () => {
+        if (!newPayee.name || !newPayee.mobile) {
+             alert("Please provide at least a name and mobile number.");
+             return;
         }
+        const createdPayee = addPayee(newPayee);
+        setNewTx(prev => ({ ...prev, payeeId: createdPayee.id })); // Select the newly created payee
+        setNewPayee({ name: '', businessTitle: '', paymentPurpose: '', mobile: '', cnic: '' });
+        setModal(modal === 'addPayment' ? 'addPayment' : 'addExpense'); // Go back to the previous modal
     };
     
-    const allTransactions = [
-        ...payments.map(p => ({ type: 'Payment/Sale', date: p.date, description: p.description, amount: p.amount, isIncome: true })),
-        ...expenses.map(e => ({ type: 'Expense', date: e.date, description: e.description, amount: e.amount, isIncome: false })),
-    ].sort((a, b) => b.date.getTime() - a.date.getTime());
+    const handlePayeeSelected = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const payeeId = e.target.value;
+        const selected = payees.find(p => p.id === payeeId);
+        setNewTx(prev => ({ ...prev, payeeId, description: selected?.paymentPurpose || prev.description }));
+    };
+
+    const inputClass = "w-full border p-2 rounded bg-white text-black border-gray-300 focus:ring-1 focus:ring-brand-dark-pink focus:outline-none";
+
+    const TransactionModal = () => {
+        const isPayment = modal === 'addPayment';
+        return (
+            <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
+                <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
+                    <form onSubmit={e => { e.preventDefault(); handleAddTransaction(isPayment ? TransactionType.Income : TransactionType.Expense); }} className="p-6 space-y-4">
+                        <h2 className="text-xl font-bold">{isPayment ? 'Add Payment Received' : 'Add Expense'}</h2>
+                        
+                        <div>
+                            <label className="text-sm font-medium">Payee (Optional)</label>
+                            <div className="flex gap-2">
+                                <select value={newTx.payeeId} onChange={handlePayeeSelected} className={inputClass}>
+                                    <option value="">Select a payee...</option>
+                                    {payees.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                </select>
+                                <button type="button" onClick={() => setModal('addPayee')} className="bg-gray-200 px-3 rounded hover:bg-gray-300 text-sm">Add New</button>
+                            </div>
+                        </div>
+
+                        <div><label className="text-sm font-medium">Description</label><input value={newTx.description} onChange={e => setNewTx({...newTx, description: e.target.value})} className={inputClass} required/></div>
+                        <div><label className="text-sm font-medium">Amount</label><input type="number" value={newTx.amount || ''} onChange={e => setNewTx({...newTx, amount: parseFloat(e.target.value)})} className={inputClass} required/></div>
+                        
+                        <div>
+                             <label className="text-sm font-medium">Method</label>
+                             <select value={newTx.method} onChange={e => setNewTx({...newTx, method: e.target.value as TransactionMethod})} className={inputClass}>
+                                 <option value={TransactionMethod.Cash}>Cash</option>
+                                 <option value={TransactionMethod.Bank}>Bank</option>
+                             </select>
+                             <p className="text-xs text-gray-500 mt-1">{newTx.method === TransactionMethod.Cash ? 'This transaction will affect "Cash in Hand".' : 'Bank transactions are recorded but do not affect "Cash in Hand".'}</p>
+                        </div>
+
+                        <div className="flex justify-end gap-3 pt-4">
+                            <button type="button" onClick={() => setModal(null)} className="bg-gray-200 py-2 px-4 rounded">Cancel</button>
+                            <button type="submit" className={`text-white py-2 px-4 rounded ${isPayment ? 'bg-green-600' : 'bg-red-600'}`}>Add Transaction</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        )
+    };
+    
+    const PayeeModal = () => (
+         <div className="fixed inset-0 bg-black bg-opacity-50 z-[60] flex justify-center items-center p-4">
+             <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
+                <form onSubmit={e => {e.preventDefault(); handleAddPayee();}} className="p-6 space-y-3">
+                     <h2 className="text-xl font-bold">Add New Payee</h2>
+                     <div><label className="text-sm">Name</label><input value={newPayee.name} onChange={e => setNewPayee({...newPayee, name: e.target.value})} className={inputClass} required /></div>
+                     <div><label className="text-sm">Business Title</label><input value={newPayee.businessTitle} onChange={e => setNewPayee({...newPayee, businessTitle: e.target.value})} className={inputClass} /></div>
+                     <div><label className="text-sm">Default Payment Purpose</label><input value={newPayee.paymentPurpose} onChange={e => setNewPayee({...newPayee, paymentPurpose: e.target.value})} className={inputClass} /></div>
+                     <div><label className="text-sm">Mobile</label><input value={newPayee.mobile} onChange={e => setNewPayee({...newPayee, mobile: e.target.value})} className={inputClass} required /></div>
+                     <div><label className="text-sm">CNIC/ID</label><input value={newPayee.cnic} onChange={e => setNewPayee({...newPayee, cnic: e.target.value})} className={inputClass} /></div>
+                     <div className="flex justify-end gap-3 pt-3">
+                        <button type="button" onClick={() => setModal(newTx.type === TransactionType.Income ? 'addPayment' : 'addExpense')} className="bg-gray-200 py-2 px-4 rounded">Back</button>
+                        <button type="submit" className="bg-blue-600 text-white py-2 px-4 rounded">Save Payee</button>
+                     </div>
+                </form>
+             </div>
+         </div>
+    );
+    
+    const PayeeHistoryModal = () => {
+        if (!currentPayee) return null;
+        const payeeTransactions = transactions.filter(t => t.payeeId === currentPayee.id);
+        return (
+             <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
+                 <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+                     <div className="p-6 border-b">
+                         <h2 className="text-xl font-bold">Transaction History for {currentPayee.name}</h2>
+                         <p className="text-sm text-gray-500">{currentPayee.businessTitle}</p>
+                     </div>
+                     <div className="p-6 overflow-y-auto">
+                        {payeeTransactions.length > 0 ? (
+                           <table className="w-full text-sm">
+                             {payeeTransactions.map(t => (
+                                 <tr key={t.id} className="border-b">
+                                     <td className="py-2">{t.date.toLocaleDateString()}</td>
+                                     <td>{t.description}</td>
+                                     <td className={`text-right font-semibold ${t.type === TransactionType.Income ? 'text-green-600' : 'text-red-600'}`}>PKR {t.amount.toLocaleString()}</td>
+                                 </tr>
+                             ))}
+                           </table>
+                        ) : <p className="text-gray-500 text-center">No transactions found for this payee.</p>}
+                     </div>
+                     <div className="p-4 bg-gray-50 border-t text-right">
+                         <button onClick={() => setCurrentPayee(null)} className="bg-gray-200 py-2 px-4 rounded">Close</button>
+                     </div>
+                 </div>
+             </div>
+        );
+    }
 
     return (
-        <div className="p-6">
-            <h1 className="text-3xl font-bold text-gray-800 mb-6">Finance Management</h1>
+        <div className="p-6 space-y-8">
+            {modal && ['addPayment', 'addExpense'].includes(modal) && <TransactionModal />}
+            {modal === 'addPayee' && <PayeeModal />}
+            {currentPayee && <PayeeHistoryModal />}
+            {modal === 'generateLedger' && <PrintableLedger transactions={filteredTransactions} cashInHand={cashInHand} onClose={() => setModal(null)} />}
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div className="bg-green-100 p-6 rounded-lg shadow"><h3 className="text-lg font-semibold text-green-800">Total Cash In</h3><p className="text-3xl font-bold text-green-900">PKR {totalIncome.toLocaleString()}</p></div>
-                <div className="bg-red-100 p-6 rounded-lg shadow"><h3 className="text-lg font-semibold text-red-800">Total Cash Out</h3><p className="text-3xl font-bold text-red-900">PKR {totalExpenses.toLocaleString()}</p></div>
-                <div className="bg-blue-100 p-6 rounded-lg shadow"><h3 className="text-lg font-semibold text-blue-800">Cash in Hand</h3><p className="text-3xl font-bold text-blue-900">PKR {netProfit.toLocaleString()}</p></div>
+            <div>
+                <h1 className="text-3xl font-bold text-gray-800">Finance Management</h1>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                <form onSubmit={handleAddPayment} className="bg-white p-6 rounded-lg shadow">
-                    <h3 className="font-bold text-lg mb-4">Add Cash In (Payment/Sale)</h3>
-                    <input value={paymentDesc} onChange={(e) => setPaymentDesc(e.target.value)} placeholder="Description (e.g., Cash deposit)" className="w-full border p-2 rounded mb-2" required />
-                    <input value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} type="number" placeholder="Amount" className="w-full border p-2 rounded mb-2" required />
-                    <button type="submit" className="w-full bg-green-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-600">Add Cash In</button>
-                </form>
-                <form onSubmit={handleAddExpense} className="bg-white p-6 rounded-lg shadow">
-                    <h3 className="font-bold text-lg mb-4">Add Cash Out (Expense)</h3>
-                    <input value={expenseDesc} onChange={(e) => setExpenseDesc(e.target.value)} placeholder="Description" className="w-full border p-2 rounded mb-2" required />
-                    <input value={expenseAmount} onChange={(e) => setExpenseAmount(e.target.value)} type="number" placeholder="Amount" className="w-full border p-2 rounded mb-2" required />
-                    <button type="submit" className="w-full bg-red-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-600">Add Cash Out</button>
-                </form>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-green-100 p-6 rounded-lg shadow"><h3 className="text-lg font-semibold text-green-800">Total Income</h3><p className="text-3xl font-bold text-green-900">PKR {totalIncome.toLocaleString()}</p></div>
+                <div className="bg-red-100 p-6 rounded-lg shadow"><h3 className="text-lg font-semibold text-red-800">Total Expense</h3><p className="text-3xl font-bold text-red-900">PKR {totalExpense.toLocaleString()}</p></div>
+                <div className="bg-blue-100 p-6 rounded-lg shadow"><h3 className="text-lg font-semibold text-blue-800">Cash in Hand</h3><p className="text-3xl font-bold text-blue-900">PKR {cashInHand.toLocaleString()}</p></div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                <div className="bg-white p-6 rounded-lg shadow">
-                    <h3 className="font-bold text-lg mb-4">Bank & Wallet Details</h3>
-                    {bankDetails.map(b => <div key={b.id} className="text-sm mb-1 flex justify-between"><span>{b.bankName}: {b.accountNumber}</span><button onClick={() => deleteBankDetails(b.id)} className="text-red-500"><Icon name="trash" className="w-4 h-4"/></button></div>)}
-                    {walletDetails.map(w => <div key={w.id} className="text-sm mb-1 flex justify-between"><span>{w.walletName}: {w.walletNumber}</span><button onClick={() => deleteWalletDetails(w.id)} className="text-red-500"><Icon name="trash" className="w-4 h-4"/></button></div>)}
-                    <input value={newBank.bankName} onChange={e => setNewBank({...newBank, bankName: e.target.value})} placeholder="Bank Name" className="w-full border p-2 rounded mt-4 mb-2 text-sm"/>
-                    <input value={newBank.accountTitle} onChange={e => setNewBank({...newBank, accountTitle: e.target.value})} placeholder="Account Title" className="w-full border p-2 rounded mb-2 text-sm"/>
-                    <input value={newBank.accountNumber} onChange={e => setNewBank({...newBank, accountNumber: e.target.value})} placeholder="Account Number" className="w-full border p-2 rounded mb-2 text-sm"/>
-                    <button onClick={() => addBankDetails(newBank)} className="w-full bg-gray-200 text-sm py-2 rounded">Add Bank</button>
+            <div className="bg-white p-6 rounded-lg shadow">
+                 <h2 className="text-2xl font-bold text-gray-800 mb-4">Expense Sheet</h2>
+                <div className="flex flex-wrap gap-4 mb-4">
+                     <button onClick={() => setModal('addPayment')} className="bg-green-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-600">Add Payment</button>
+                     <button onClick={() => setModal('addExpense')} className="bg-red-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-600">Add Expense</button>
+                     <button onClick={() => setModal('generateLedger')} className="bg-blue-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-600">Generate Ledger</button>
                 </div>
-                <div className="bg-white p-6 rounded-lg shadow">
-                     <h3 className="font-bold text-lg mb-4 invisible">.</h3>
-                     <input value={newWallet.walletName} onChange={e => setNewWallet({...newWallet, walletName: e.target.value})} placeholder="Wallet Name" className="w-full border p-2 rounded mt-4 mb-2 text-sm"/>
-                     <input value={newWallet.accountTitle} onChange={e => setNewWallet({...newWallet, accountTitle: e.target.value})} placeholder="Account Title" className="w-full border p-2 rounded mb-2 text-sm"/>
-                     <input value={newWallet.walletNumber} onChange={e => setNewWallet({...newWallet, walletNumber: e.target.value})} placeholder="Wallet Number" className="w-full border p-2 rounded mb-2 text-sm"/>
-                    <button onClick={() => addWalletDetails(newWallet)} className="w-full bg-gray-200 text-sm py-2 rounded">Add Wallet</button>
+
+                <div className="flex flex-col sm:flex-row items-center gap-4 mb-4">
+                    <input type="text" placeholder="Search by ID or description..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className={`${inputClass} sm:w-auto flex-grow`} />
+                    <select onChange={(e) => setFilter(e.target.value)} className={inputClass + ' sm:w-auto'}>
+                        <option value="All">Filter: All</option>
+                        <option value={TransactionType.Income}>Income</option>
+                        <option value={TransactionType.Expense}>Expense</option>
+                    </select>
                 </div>
-            </div>
-            
-            <h2 className="text-2xl font-bold text-gray-800 mb-4">General Ledger</h2>
-            <div className="bg-white rounded-lg shadow overflow-x-auto">
-                 <table className="w-full text-sm text-left text-gray-500">
-                    <thead className="text-xs text-gray-700 uppercase bg-gray-50">
-                        <tr>
-                            <th scope="col" className="px-6 py-3">Date</th>
-                            <th scope="col" className="px-6 py-3">Description</th>
-                            <th scope="col" className="px-6 py-3">Type</th>
-                            <th scope="col" className="px-6 py-3 text-right">Amount</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {allTransactions.map((t, i) => (
-                             <tr key={i} className="bg-white border-b">
-                                <td className="px-6 py-4">{t.date.toLocaleDateString()}</td>
-                                <td className="px-6 py-4 font-medium text-gray-900">{t.description}</td>
-                                <td className="px-6 py-4">{t.type}</td>
-                                <td className={`px-6 py-4 text-right font-semibold ${t.isIncome ? 'text-green-600' : 'text-red-600'}`}>
-                                    {t.isIncome ? '+' : '-'} PKR {t.amount.toLocaleString()}
-                                </td>
+                 <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left text-gray-500">
+                        <thead className="text-xs text-gray-700 uppercase bg-gray-50">
+                            <tr>
+                                <th className="px-6 py-3">ID</th>
+                                <th className="px-6 py-3">Date</th>
+                                <th className="px-6 py-3">Description</th>
+                                <th className="px-6 py-3">Type</th>
+                                <th className="px-6 py-3 text-right">Amount</th>
+                                <th className="px-6 py-3 text-right">Running Balance (Cash)</th>
                             </tr>
-                        ))}
-                        {allTransactions.length === 0 && (
-                            <tr><td colSpan={4} className="text-center py-8 text-gray-500">No transactions recorded.</td></tr>
-                        )}
-                    </tbody>
-                 </table>
+                        </thead>
+                        <tbody>
+                            {filteredTransactions.map(t => (
+                                <tr key={t.id} className="bg-white border-b">
+                                    <td className="px-6 py-4 text-xs text-gray-400">{t.id}</td>
+                                    <td className="px-6 py-4">{t.date.toLocaleDateString()}</td>
+                                    <td className="px-6 py-4 font-medium text-gray-900">{t.description}</td>
+                                    <td className="px-6 py-4"><span className={`px-2 py-1 text-xs rounded-full ${t.type === TransactionType.Income ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{t.type}</span></td>
+                                    <td className={`px-6 py-4 text-right font-semibold ${t.type === TransactionType.Income ? 'text-green-600' : 'text-red-600'}`}>PKR {t.amount.toLocaleString()}</td>
+                                    <td className="px-6 py-4 text-right font-mono">PKR {t.runningBalance.toLocaleString()}</td>
+                                </tr>
+                            ))}
+                             {filteredTransactions.length === 0 && (
+                                <tr><td colSpan={6} className="text-center py-8 text-gray-500">No transactions match your criteria.</td></tr>
+                            )}
+                        </tbody>
+                    </table>
+                 </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-lg shadow">
+                 <h2 className="text-2xl font-bold text-gray-800 mb-4">Payee List</h2>
+                 <div className="overflow-x-auto">
+                     <table className="w-full text-sm text-left text-gray-500">
+                         <thead className="text-xs text-gray-700 uppercase bg-gray-50">
+                             <tr>
+                                 <th className="px-6 py-3">Name</th>
+                                 <th className="px-6 py-3">Mobile</th>
+                                 <th className="px-6 py-3">Purpose</th>
+                                 <th className="px-6 py-3">Action</th>
+                             </tr>
+                         </thead>
+                         <tbody>
+                            {payees.map(p => (
+                                <tr key={p.id} className="bg-white border-b">
+                                    <td className="px-6 py-4 font-medium text-gray-900">{p.name}</td>
+                                    <td className="px-6 py-4">{p.mobile}</td>
+                                    <td className="px-6 py-4">{p.paymentPurpose}</td>
+                                    <td className="px-6 py-4">
+                                        <button onClick={() => { setCurrentPayee(p); setModal('viewPayee'); }} className="text-blue-600 hover:underline text-xs">View History</button>
+                                    </td>
+                                </tr>
+                            ))}
+                             {payees.length === 0 && (
+                                <tr><td colSpan={4} className="text-center py-8 text-gray-500">No payees added yet.</td></tr>
+                            )}
+                         </tbody>
+                     </table>
+                 </div>
             </div>
         </div>
     );
