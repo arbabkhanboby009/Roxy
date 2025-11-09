@@ -18,12 +18,15 @@ interface StoreContextType {
   currentUser: User | null;
   reviews: Review[];
   notifications: Notification[];
+  viewingOrderId: string | null;
+  setViewingOrderId: (id: string | null) => void;
   addToCart: (product: Product, size: string, color: string) => boolean;
   removeFromCart: (productId: string, size: string, color: string) => void;
   updateCartQuantity: (productId: string, size: string, color: string, quantity: number) => void;
   clearCart: () => void;
   getCartTotal: () => number;
   placeOrder: (customer: Customer, paymentMethod: PaymentMethod, paymentScreenshot?: string) => Order;
+  cancelOrderByCustomer: (orderId: string) => boolean;
   addProduct: (productData: Omit<Product, 'id' | 'addedDate'>) => void;
   updateProduct: (updatedProduct: Product) => void;
   deleteProduct: (productId: string) => void;
@@ -37,7 +40,6 @@ interface StoreContextType {
   addWalletDetails: (details: Omit<WalletDetails, 'id'>) => void;
   deleteWalletDetails: (id: string) => void;
   addReview: (productId: string, review: Omit<Review, 'id' | 'productId' | 'createdAt'>) => void;
-  addNotification: (message: string, orderId: string) => void;
   markNotificationAsRead: (notificationId: string) => void;
   markAllNotificationsAsRead: () => void;
   addPayable: (payable: Omit<Payable, 'id' | 'status'>) => void;
@@ -48,44 +50,147 @@ interface StoreContextType {
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
+// --- DUMMY DATA FOR FIRST-TIME LOAD ---
 const defaultShopDetails: ShopDetails = {
     name: 'Roxy Shoes',
-    owner: '',
-    address: '',
-    contactPerson: '',
-    contactMobile: '',
-    email: '',
-    logo: undefined,
+    owner: 'Mr. Shakeel Ahmed',
+    address: 'Shop 123, Shoe Plaza, Karachi',
+    contactPerson: 'Imran Khan',
+    contactMobile: '+92 300 1234567',
+    email: 'contact@roxyshoes.com',
 };
 
-export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS);
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [payees, setPayees] = useState<Payee[]>([]);
-  const [reviews, setReviews] = useState<Review[]>([]);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [payables, setPayables] = useState<Payable[]>([]);
-  const [receivables, setReceivables] = useState<Receivable[]>([]);
+const initialPayees: Payee[] = [
+    { id: 'payee-1', name: 'Leather Supplier Co.', businessTitle: 'Vendor', paymentPurpose: 'Raw Material Purchase', mobile: '0301-1112233'},
+    { id: 'payee-2', name: 'Ali Express Deliveries', businessTitle: 'Courier', paymentPurpose: 'Delivery Services', mobile: '0302-4445566'},
+    { id: 'payee-3', name: 'Ayesha Khan', businessTitle: 'Customer', paymentPurpose: 'Online Order Payment', mobile: '0333-9876543'},
+];
 
-  const [shopDetails, setShopDetails] = useState<ShopDetails>(() => {
-    try {
-        const savedDetails = localStorage.getItem('shopDetails');
-        return savedDetails ? JSON.parse(savedDetails) : defaultShopDetails;
-    } catch (error) {
-        console.error("Failed to parse shop details from localStorage", error);
-        return defaultShopDetails;
+const initialTransactions: Transaction[] = [
+    { id: 'txn-1', date: new Date('2023-10-20'), description: 'Initial Capital Investment', amount: 50000, type: TransactionType.Income, method: TransactionMethod.Cash, runningBalance: 50000 },
+    { id: 'txn-2', date: new Date('2023-10-22'), description: 'Purchase of leather stock', amount: 15000, type: TransactionType.Expense, method: TransactionMethod.Cash, payeeId: 'payee-1', runningBalance: 35000 },
+    { id: 'txn-3', date: new Date('2023-10-25'), description: 'Payment for In-Shop Order #SHP-001', amount: 2800, type: TransactionType.Income, method: TransactionMethod.Cash, orderId: 'SHP-001', runningBalance: 37800 },
+];
+
+const getInitialOrders = (): Order[] => [
+    {
+      id: 'SHP-001', type: OrderType.Shop, status: OrderStatus.Delivered, createdAt: new Date('2023-10-25'),
+      customer: { fullName: 'Walk-in Customer', mobile: 'N/A', address: 'In-Store', email: ''},
+      items: [{ id: 'ROXXY-004', name: 'Chic Ballerina Flats', price: 2800, quantity: 1, selectedColor: 'Black', selectedSize: '7', image: MOCK_PRODUCTS.find(p => p.id === 'ROXXY-004')?.images?.['Black']?.[0] || '' }],
+      subtotal: 2800, tax: 280, deliveryCharge: 0, grandTotal: 3080, paymentMethod: PaymentMethod.COD
+    },
+    {
+      id: 'ONL-001', type: OrderType.Online, status: OrderStatus.Dispatched, createdAt: new Date('2023-10-26'),
+      customer: { fullName: 'Ayesha Khan', mobile: '0333-9876543', address: '12-B, Gulshan Iqbal, Karachi', email: 'ayesha.k@example.com'},
+      items: [{ id: 'ROXXY-001', name: 'Elegant Stiletto Heels', price: 4500, quantity: 1, selectedColor: 'Red', selectedSize: '8', image: MOCK_PRODUCTS.find(p => p.id === 'ROXXY-001')?.images?.['Red']?.[0] || '' }],
+      subtotal: 4500, tax: 450, deliveryCharge: 300, grandTotal: 5250, paymentMethod: PaymentMethod.COD
     }
-  });
+];
 
-  const [bankDetails, setBankDetails] = useState<BankDetails[]>([]);
-  const [walletDetails, setWalletDetails] = useState<WalletDetails[]>([]);
-  const [users, setUsers] = useState<User[]>([
+const initialPayables: Payable[] = [
+    { id: 'payable-1', vendor: 'Leather Supplier Co.', description: 'Invoice #LS-987 for leather shipment', amount: 15000, dueDate: new Date('2023-11-15'), status: 'Paid'},
+    { id: 'payable-2', vendor: 'K-Electric', description: 'October Electricity Bill', amount: 8500, dueDate: new Date('2023-11-05'), status: 'Pending'}
+];
+
+const initialReceivables: Receivable[] = [
+    { id: 'receivable-1', customerName: 'Corporate Client A', description: 'Bulk order for office event', amount: 25000, dueDate: new Date('2023-11-20'), status: 'Pending'}
+];
+
+// --- LOCALSTORAGE HELPER FUNCTIONS ---
+
+const dateReviver = (key: string, value: any) => {
+    const isoDateRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/;
+    if (typeof value === 'string' && isoDateRegex.test(value)) {
+        return new Date(value);
+    }
+    return value;
+};
+
+const loadFromStorage = <T,>(key: string, defaultValue: T): T => {
+    try {
+        const saved = localStorage.getItem(key);
+        if (saved === null || saved === undefined) {
+            return defaultValue;
+        }
+        return JSON.parse(saved, dateReviver);
+    } catch (e) {
+        console.error(`Failed to load ${key} from storage`, e);
+        return defaultValue;
+    }
+};
+
+const saveToStorage = <T,>(key: string, value: T) => {
+    try {
+        const serializedValue = JSON.stringify(value);
+        localStorage.setItem(key, serializedValue);
+    } catch (e) {
+        console.error(`Failed to save ${key} to storage`, e);
+    }
+};
+
+
+export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [products, setProducts] = useState<Product[]>(() => loadFromStorage('app_products', MOCK_PRODUCTS));
+  const [cart, setCart] = useState<CartItem[]>(() => loadFromStorage('app_cart', []));
+  const [orders, setOrders] = useState<Order[]>(() => loadFromStorage('app_orders', getInitialOrders()));
+  const [transactions, setTransactions] = useState<Transaction[]>(() => loadFromStorage('app_transactions', initialTransactions));
+  const [payees, setPayees] = useState<Payee[]>(() => loadFromStorage('app_payees', initialPayees));
+  const [shopDetails, setShopDetails] = useState<ShopDetails>(() => loadFromStorage('app_shop_details', defaultShopDetails));
+  const [reviews, setReviews] = useState<Review[]>(() => loadFromStorage('app_reviews', [
+      { id: 'rev-1', productId: 'ROXXY-001', customerName: 'Sara Ahmed', rating: 5, comment: 'Absolutely stunning heels! So comfortable too.', createdAt: new Date('2023-10-27')}
+  ]));
+  const [notifications, setNotifications] = useState<Notification[]>(() => loadFromStorage('app_notifications', [
+      { id: 'notif-1', message: 'New online order #ONL-001 received.', orderId: 'ONL-001', createdAt: new Date('2023-10-26'), isRead: false}
+  ]));
+  const [payables, setPayables] = useState<Payable[]>(() => loadFromStorage('app_payables', initialPayables));
+  const [receivables, setReceivables] = useState<Receivable[]>(() => loadFromStorage('app_receivables', initialReceivables));
+  const [bankDetails, setBankDetails] = useState<BankDetails[]>(() => loadFromStorage('app_bank_details', [
+      {id: 'bank-1', bankName: 'Meezan Bank', accountTitle: 'Roxy Shoes', accountNumber: '0123456789012345'}
+  ]));
+  const [walletDetails, setWalletDetails] = useState<WalletDetails[]>(() => loadFromStorage('app_wallet_details', [
+       {id: 'wallet-1', walletName: 'EasyPaisa', accountTitle: 'Shakeel Ahmed', walletNumber: '03001234567'}
+  ]));
+  const [users, setUsers] = useState<User[]>(() => loadFromStorage('app_users', [
       { id: 'user-1', name: 'Admin', role: 'Admin' },
-  ]);
-  const [currentUser, setCurrentUser] = useState<User | null>(users[0]);
-  const [counters, setCounters] = useState({ product: products.length, order: 0, shopOrder: 0, review: reviews.length, notification: 0, payable: 0, receivable: 0 });
+  ]));
+  const [counters, setCounters] = useState(() => loadFromStorage('app_counters', { product: 10, order: 1, shopOrder: 1, review: 1, notification: 1, payable: 2, receivable: 1 }));
+
+
+  useEffect(() => { saveToStorage('app_products', products); }, [products]);
+  useEffect(() => { saveToStorage('app_cart', cart); }, [cart]);
+  useEffect(() => { saveToStorage('app_orders', orders); }, [orders]);
+  useEffect(() => { saveToStorage('app_transactions', transactions); }, [transactions]);
+  useEffect(() => { saveToStorage('app_payees', payees); }, [payees]);
+  useEffect(() => { saveToStorage('app_shop_details', shopDetails); }, [shopDetails]);
+  useEffect(() => { saveToStorage('app_reviews', reviews); }, [reviews]);
+  useEffect(() => { saveToStorage('app_notifications', notifications); }, [notifications]);
+  useEffect(() => { saveToStorage('app_payables', payables); }, [payables]);
+  useEffect(() => { saveToStorage('app_receivables', receivables); }, [receivables]);
+  useEffect(() => { saveToStorage('app_bank_details', bankDetails); }, [bankDetails]);
+  useEffect(() => { saveToStorage('app_wallet_details', walletDetails); }, [walletDetails]);
+  useEffect(() => { saveToStorage('app_users', users); }, [users]);
+  useEffect(() => { saveToStorage('app_counters', counters); }, [counters]);
+  
+  // FIX: Add multi-tab state synchronization
+  useEffect(() => {
+    const syncState = (event: StorageEvent) => {
+        if (event.key === 'app_products') setProducts(loadFromStorage('app_products', MOCK_PRODUCTS));
+        if (event.key === 'app_cart') setCart(loadFromStorage('app_cart', []));
+        if (event.key === 'app_orders') setOrders(loadFromStorage('app_orders', getInitialOrders()));
+        if (event.key === 'app_transactions') setTransactions(loadFromStorage('app_transactions', initialTransactions));
+        if (event.key === 'app_payees') setPayees(loadFromStorage('app_payees', initialPayees));
+        if (event.key === 'app_shop_details') setShopDetails(loadFromStorage('app_shop_details', defaultShopDetails));
+        if (event.key === 'app_reviews') setReviews(loadFromStorage('app_reviews', []));
+        if (event.key === 'app_notifications') setNotifications(loadFromStorage('app_notifications', []));
+    };
+
+    window.addEventListener('storage', syncState);
+    return () => window.removeEventListener('storage', syncState);
+  }, []);
+
+
+  const [currentUser] = useState<User | null>(users[0]);
+  const [viewingOrderId, setViewingOrderId] = useState<string | null>(null);
 
   const addNotification = (message: string, orderId: string) => {
     const newNotification: Notification = {
@@ -193,12 +298,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     cart.forEach(item => {
         updateStock(item.id, item.selectedColor, item.selectedSize, -item.quantity);
     });
-    
-    const locationInfo = customer.location ? `Customer location: https://www.google.com/maps?q=${customer.location.lat},${customer.location.lng}` : 'Customer location not provided.';
-    console.log(`SIMULATING EMAIL: Order confirmation for #${newOrder.id} to ${customer.email} and admin.`);
-    console.log(`ADMIN EMAIL CONTENT: New order received. ${locationInfo}`);
-    addNotification(`Your order #${newOrder.id} has been placed!`, newOrder.id);
-    addNotification(`New online order #${newOrder.id} received. Location captured.`, newOrder.id);
+        
+    addNotification(`New online order #${newOrder.id} received.`, newOrder.id);
 
     clearCart();
     return newOrder;
@@ -272,28 +373,57 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const updateOrderStatus = (orderId: string, status: OrderStatus) => {
     setOrders(prev => prev.map(o => {
-        if (o.id === orderId) {
+        if (o.id === orderId && o.status !== status) {
+            // Restore stock if an order is cancelled
             if (o.status !== OrderStatus.Cancelled && status === OrderStatus.Cancelled) {
                  o.items.forEach(item => updateStock(item.id, item.selectedColor, item.selectedSize, item.quantity));
-            } else if (o.status === OrderStatus.Cancelled && status !== OrderStatus.Cancelled) {
+            } 
+            // Deduct stock again if a cancelled order is un-cancelled
+            else if (o.status === OrderStatus.Cancelled && status !== OrderStatus.Cancelled) {
                  o.items.forEach(item => updateStock(item.id, item.selectedColor, item.selectedSize, -item.quantity));
             }
-            if (o.status !== status) {
-                 addNotification(`Your order #${o.id} has been updated to: ${status}.`, o.id);
-            }
+
             return {...o, status};
         }
         return o;
     }));
+    
+    // If order is completed or cancelled by admin, remove all related notifications.
+    if (status === OrderStatus.Delivered || status === OrderStatus.Cancelled) {
+        setNotifications(prev => prev.filter(n => n.orderId !== orderId));
+    }
   };
+
+  const cancelOrderByCustomer = (orderId: string): boolean => {
+    let orderFoundAndCancellable = false;
+    
+    const originalOrder = orders.find(o => o.id === orderId);
+    
+    if (originalOrder && (originalOrder.status === OrderStatus.Pending || originalOrder.status === OrderStatus.Confirmed)) {
+      orderFoundAndCancellable = true;
+      
+      setOrders(prev => prev.map(o => 
+        o.id === orderId ? { ...o, status: OrderStatus.Cancelled } : o
+      ));
+      
+      originalOrder.items.forEach(item => {
+        updateStock(item.id, item.selectedColor, item.selectedSize, item.quantity);
+      });
+      
+      addNotification(`Order #${orderId} has been cancelled by the customer.`, orderId);
+      
+      // Remove original "new order" notification
+      setNotifications(prev => prev.filter(n => 
+        !(n.orderId === orderId && n.message.includes('New online order'))
+      ));
+    }
+    
+    return orderFoundAndCancellable;
+  };
+
 
   const updateShopDetails = (details: ShopDetails) => {
     setShopDetails(details);
-    try {
-        localStorage.setItem('shopDetails', JSON.stringify(details));
-    } catch (error) {
-        console.error("Failed to save shop details to localStorage", error);
-    }
   };
 
   const addBankDetails = (details: Omit<BankDetails, 'id'>) => setBankDetails(p => [...p, { ...details, id: `bank-${Date.now()}` }]);
@@ -363,7 +493,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   return (
-    <StoreContext.Provider value={{ products, cart, orders, transactions, payees, payables, receivables, shopDetails, bankDetails, walletDetails, users, currentUser, reviews, notifications, addToCart, removeFromCart, updateCartQuantity, clearCart, getCartTotal, placeOrder, addProduct, updateProduct, deleteProduct, updateOrderStatus, addTransaction, addPayee, addShopOrder, updateShopDetails, addBankDetails, deleteBankDetails, addWalletDetails, deleteWalletDetails, addReview, addNotification, markNotificationAsRead, markAllNotificationsAsRead, addPayable, updatePayableStatus, addReceivable, updateReceivableStatus }}>
+    <StoreContext.Provider value={{ products, cart, orders, transactions, payees, payables, receivables, shopDetails, bankDetails, walletDetails, users, currentUser, reviews, notifications, viewingOrderId, setViewingOrderId, addToCart, removeFromCart, updateCartQuantity, clearCart, getCartTotal, placeOrder, cancelOrderByCustomer, addProduct, updateProduct, deleteProduct, updateOrderStatus, addTransaction, addPayee, addShopOrder, updateShopDetails, addBankDetails, deleteBankDetails, addWalletDetails, deleteWalletDetails, addReview, markNotificationAsRead, markAllNotificationsAsRead, addPayable, updatePayableStatus, addReceivable, updateReceivableStatus }}>
       {children}
     </StoreContext.Provider>
   );

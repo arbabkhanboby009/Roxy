@@ -26,27 +26,27 @@ const CategoryPage: React.FC = () => {
     }
     
     const filteredProducts = products.filter(p => {
-        const pCat = p.category.toLowerCase();
-        const mainCatMatch = parentCategory?.toLowerCase() === pCat;
+        const pCat = p.category;
+        const mainCatMatch = parentCategory === pCat;
         const subCatMatch = selectedSubcategory === 'All' || p.subcategory === selectedSubcategory;
         return mainCatMatch && subCatMatch;
     });
 
     return (
         <div>
-            <h1 className="text-4xl font-serif font-bold text-brand-text mb-4">{categoryName} Collection</h1>
+            <h1 className="text-4xl font-serif font-bold text-brand-silver mb-4">{categoryName} Collection</h1>
             
             <div className="flex items-center space-x-4 mb-8 overflow-x-auto pb-2">
                 <Link 
                     to={`/category/${category?.toLowerCase()}`}
-                    className={`px-4 py-2 rounded-full text-sm font-semibold transition ${selectedSubcategory === 'All' ? 'bg-brand-text text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
+                    className={`px-4 py-2 rounded-full text-sm font-semibold transition whitespace-nowrap ${selectedSubcategory === 'All' ? 'bg-brand-silver text-brand-blue' : 'bg-brand-blue-light/50 text-brand-text-light hover:bg-brand-silver/30'}`}>
                     All
                 </Link>
                 {subcategories.map(sub => (
                      <Link
                         key={sub}
                         to={`/category/${category?.toLowerCase()}?subcategory=${encodeURIComponent(sub)}`}
-                        className={`px-4 py-2 rounded-full text-sm font-semibold transition whitespace-nowrap ${selectedSubcategory === sub ? 'bg-brand-text text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
+                        className={`px-4 py-2 rounded-full text-sm font-semibold transition whitespace-nowrap ${selectedSubcategory === sub ? 'bg-brand-silver text-brand-blue' : 'bg-brand-blue-light/50 text-brand-text-light hover:bg-brand-silver/30'}`}>
                         {sub}
                     </Link>
                 ))}
@@ -59,7 +59,7 @@ const CategoryPage: React.FC = () => {
                     ))}
                 </div>
             ) : (
-                <p className="text-center text-gray-500 text-lg">No products found in this category.</p>
+                <p className="text-center text-gray-400 text-lg">No products found in this category.</p>
             )}
         </div>
     );

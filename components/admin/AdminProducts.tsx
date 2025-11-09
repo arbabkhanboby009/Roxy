@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, KeyboardEvent } from 'react';
 import { useStore } from '../../hooks/useStore';
 import type { Product, ProductVariant } from '../../types';
 import Icon from '../Icon';
@@ -10,13 +10,17 @@ const AdminItems: React.FC = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
     const [formData, setFormData] = useState<Omit<Product, 'id' | 'addedDate'>>({
-        name: '', description: '', price: 0, category: 'Ladies', subcategory: CATEGORIES['Ladies'][0], sizes: [], colors: [], images: {}, stock: []
+        name: '', description: '', price: 0, salePrice: undefined, isFeatured: false, category: 'Ladies', subcategory: CATEGORIES['Ladies'][0], sizes: [], colors: [], images: {}, stock: []
     });
     const [descKeywords, setDescKeywords] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
+    
+    const [availableColors, setAvailableColors] = useState(AVAILABLE_COLORS);
+    const [isAddingColor, setIsAddingColor] = useState(false);
+    const [newColorName, setNewColorName] = useState('');
 
-    // State for Video Ad Generator
+
     const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
     const [productForAd, setProductForAd] = useState<Product | null>(null);
     const [videoPrompt, setVideoPrompt] = useState('');
@@ -25,6 +29,26 @@ const AdminItems: React.FC = () => {
     const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
     const [videoGenerationError, setVideoGenerationError] = useState<string | null>(null);
     const [apiKeySelected, setApiKeySelected] = useState(false);
+
+    // Refs for modal form
+    const nameRef = useRef<HTMLInputElement>(null);
+    const priceRef = useRef<HTMLInputElement>(null);
+    const salePriceRef = useRef<HTMLInputElement>(null);
+    const descKeywordsRef = useRef<HTMLInputElement>(null);
+    const descriptionRef = useRef<HTMLTextAreaElement>(null);
+    
+    const modalInputRefs = [nameRef, priceRef, salePriceRef, descKeywordsRef, descriptionRef];
+    
+    const handleModalKeyDown = (e: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>, index: number) => {
+        if (e.key === 'Enter' && e.currentTarget.tagName !== 'TEXTAREA') {
+            e.preventDefault();
+            const nextInput = modalInputRefs[index + 1];
+            if (nextInput?.current) {
+                nextInput.current.focus();
+            }
+        }
+    };
+
 
     const filteredProducts = useMemo(() => {
         if (!searchTerm.trim()) {
@@ -39,6 +63,8 @@ const AdminItems: React.FC = () => {
     useEffect(() => {
         if (editingProduct) {
             setFormData(editingProduct);
+            const allColors = new Set([...AVAILABLE_COLORS, ...editingProduct.colors]);
+            setAvailableColors(Array.from(allColors));
             setIsModalOpen(true);
         }
     }, [editingProduct]);
@@ -59,17 +85,33 @@ const AdminItems: React.FC = () => {
 
     const handleOpenModal = () => {
         setEditingProduct(null);
-        setFormData({ name: '', description: '', price: 0, category: 'Ladies', subcategory: CATEGORIES['Ladies'][0], sizes: [], colors: [], images: {}, stock: [] });
+        setFormData({ name: '', description: '', price: 0, salePrice: undefined, isFeatured: false, category: 'Ladies', subcategory: CATEGORIES['Ladies'][0], sizes: [], colors: [], images: {}, stock: [] });
+        setAvailableColors(AVAILABLE_COLORS);
         setIsModalOpen(true);
     };
 
     const handleCloseModal = () => setIsModalOpen(false);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-        const { name, value } = e.target;
+        const { name, value, type } = e.target;
         
+        if (type === 'checkbox') {
+            const { checked } = e.target as HTMLInputElement;
+            setFormData(prev => ({ ...prev, [name]: checked }));
+            return;
+        }
+
         setFormData(prev => {
-            let newState = { ...prev, [name]: name === 'price' ? parseFloat(value) : value };
+            let finalValue: any = value;
+            if (name === 'price') {
+                finalValue = parseFloat(value) || 0;
+            }
+            if (name === 'salePrice') {
+                finalValue = value === '' ? undefined : parseFloat(value);
+            }
+
+            let newState = { ...prev, [name]: finalValue };
+
             if (name === 'category') {
                 if (value === 'Ladies') {
                     newState.subcategory = CATEGORIES['Ladies'][0];
@@ -117,7 +159,6 @@ const AdminItems: React.FC = () => {
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        // Correctly set category based on subcategory before saving
         const finalFormData = { ...formData };
         if (Object.values(CATEGORIES.Kids.Boys).includes(finalFormData.subcategory)) {
             finalFormData.category = 'Boys';
@@ -147,6 +188,16 @@ const AdminItems: React.FC = () => {
             Promise.all(files.map(fileToDataUrl)).then(images => setFormData(prev => ({ ...prev, images: { ...prev.images, [color]: images } })));
         }
     };
+
+    const handleAddNewColor = () => {
+        const formattedColor = newColorName.trim().charAt(0).toUpperCase() + newColorName.trim().slice(1);
+        if (formattedColor && !availableColors.includes(formattedColor)) {
+            setAvailableColors(prev => [...prev, formattedColor]);
+            handleMultiSelect('colors', formattedColor);
+        }
+        setNewColorName('');
+        setIsAddingColor(false);
+    };
     
     const handleOpenVideoModal = (product: Product) => {
         setProductForAd(product);
@@ -168,7 +219,6 @@ const AdminItems: React.FC = () => {
         if (window.aistudio) {
             // @ts-ignore
             await window.aistudio.openSelectKey();
-            // Assume success to avoid race conditions
             setApiKeySelected(true);
         }
     };
@@ -218,13 +268,13 @@ const AdminItems: React.FC = () => {
     };
 
     const totalStock = (id: string) => products.find(p => p.id === id)?.stock.reduce((sum, v) => sum + v.quantity, 0) || 0;
-    const inputClass = "w-full border p-2 rounded bg-white text-black border-gray-300 focus:ring-1 focus:ring-brand-dark-pink focus:outline-none";
+    const inputClass = "w-full border p-2 rounded bg-white text-black border-gray-300 focus:ring-1 focus:ring-brand-primary-dark focus:outline-none";
 
     return (
         <div className="p-6">
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-3xl font-bold text-gray-800">Items</h1>
-                <button onClick={handleOpenModal} className="bg-brand-text text-white font-bold py-2 px-4 rounded-lg hover:bg-opacity-90 flex items-center"><Icon name="plus" className="w-5 h-5 mr-2" /> Add Item</button>
+                <button onClick={handleOpenModal} className="bg-brand-primary text-white font-bold py-2 px-4 rounded-lg hover:bg-brand-primary-dark transition-colors flex items-center"><Icon name="plus" className="w-5 h-5 mr-2" /> Add Item</button>
             </div>
 
             <div className="mb-4">
@@ -233,7 +283,7 @@ const AdminItems: React.FC = () => {
                     placeholder="Search products by name or ID..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full max-w-md border p-2 rounded bg-white text-black border-gray-300 focus:ring-1 focus:ring-brand-dark-pink focus:outline-none"
+                    className="w-full max-w-md border p-2 rounded bg-white text-black border-gray-300 focus:ring-1 focus:ring-brand-primary-dark focus:outline-none"
                 />
             </div>
 
@@ -275,17 +325,22 @@ const AdminItems: React.FC = () => {
                         <form onSubmit={handleSubmit} className="p-6 space-y-4">
                             <h2 className="text-2xl font-bold">{editingProduct ? 'Edit' : 'Add'} Item</h2>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div><label>Item Title</label><input name="name" value={formData.name} onChange={handleChange} className={inputClass} required /></div>
-                                <div><label>Price</label><input name="price" type="number" value={formData.price} onChange={handleChange} className={inputClass} required /></div>
+                                <div><label>Item Title</label><input ref={nameRef} onKeyDown={e => handleModalKeyDown(e, 0)} name="name" value={formData.name} onChange={handleChange} className={inputClass} required /></div>
+                                <div><label>Price</label><input ref={priceRef} onKeyDown={e => handleModalKeyDown(e, 1)} name="price" type="text" inputMode="decimal" pattern="[0-9]*\.?[0-9]+" value={formData.price} onChange={handleChange} className={inputClass} required /></div>
+                                <div><label>Sale Price (Optional)</label><input ref={salePriceRef} onKeyDown={e => handleModalKeyDown(e, 2)} name="salePrice" type="text" inputMode="decimal" pattern="[0-9]*\.?[0-9]*" placeholder="e.g., 2999" value={formData.salePrice || ''} onChange={handleChange} className={inputClass} /></div>
+                                <div className="flex items-center pt-6">
+                                    <input type="checkbox" id="isFeatured" name="isFeatured" checked={!!formData.isFeatured} onChange={handleChange} className="h-4 w-4 rounded border-gray-300 text-brand-primary focus:ring-brand-primary" />
+                                    <label htmlFor="isFeatured" className="ml-2 block text-sm text-gray-900">Feature this item on homepage</label>
+                                </div>
                             </div>
                             <div>
                                 <label>Description Keywords (optional)</label>
                                 <div className="flex items-center space-x-2">
-                                <input value={descKeywords} onChange={(e) => setDescKeywords(e.target.value)} placeholder="e.g., comfortable, stylish, summer wear" className={inputClass} />
+                                <input ref={descKeywordsRef} onKeyDown={e => handleModalKeyDown(e, 3)} value={descKeywords} onChange={(e) => setDescKeywords(e.target.value)} placeholder="e.g., comfortable, stylish, summer wear" className={inputClass} />
                                 <button type="button" onClick={handleDescriptionGeneration} disabled={isGenerating} className="text-sm bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 disabled:bg-gray-400 whitespace-nowrap">{isGenerating ? 'Generating...' : 'Generate with AI'}</button>
                                 </div>
                             </div>
-                            <div><label>Description</label><textarea name="description" value={formData.description} onChange={handleChange} rows={3} className={inputClass} required /></div>
+                            <div><label>Description</label><textarea ref={descriptionRef} name="description" value={formData.description} onChange={handleChange} rows={3} className={inputClass} required /></div>
                             <div>
                                 <label>Category</label>
                                 <select name="subcategory" value={`${formData.category} - ${formData.subcategory}`} onChange={e => handleSubCategoryChange(e.target.value)} className={inputClass}>
@@ -301,11 +356,21 @@ const AdminItems: React.FC = () => {
                             </div>
                             <div>
                                 <label className="font-bold">Colors</label>
-                                <div className="flex flex-wrap gap-2 mt-1 p-2 border rounded-md">{AVAILABLE_COLORS.map(c => <button type="button" key={c} onClick={() => handleMultiSelect('colors', c)} className={`px-3 py-1 border rounded-full text-sm ${formData.colors.includes(c) ? 'bg-brand-text text-white' : ''}`}>{c}</button>)}</div>
+                                <div className="flex flex-wrap items-center gap-2 mt-1 p-2 border rounded-md">
+                                    {availableColors.map(c => <button type="button" key={c} onClick={() => handleMultiSelect('colors', c)} className={`px-3 py-1 border rounded-full text-sm ${formData.colors.includes(c) ? 'bg-brand-primary text-white' : ''}`}>{c}</button>)}
+                                    {!isAddingColor && <button type="button" onClick={() => setIsAddingColor(true)} className="text-sm bg-gray-200 text-gray-700 px-3 py-1 rounded-full hover:bg-gray-300">+ Add New</button>}
+                                    {isAddingColor && (
+                                        <div className="flex items-center gap-2">
+                                            <input value={newColorName} onChange={(e) => setNewColorName(e.target.value)} placeholder="e.g., Teal" className="border-gray-300 rounded-md p-1 text-sm w-24" />
+                                            <button type="button" onClick={handleAddNewColor} className="text-sm bg-green-500 text-white px-3 py-1 rounded-full">Save</button>
+                                            <button type="button" onClick={() => setIsAddingColor(false)} className="text-sm text-gray-500">Cancel</button>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                             <div>
                                 <label className="font-bold">Sizes</label>
-                                <div className="flex flex-wrap gap-2 mt-1 p-2 border rounded-md">{PAKISTANI_SHOE_SIZES.map(s => <button type="button" key={s} onClick={() => handleMultiSelect('sizes', s)} className={`px-3 py-1 border rounded-full text-sm ${formData.sizes.includes(s) ? 'bg-brand-text text-white' : ''}`}>{s}</button>)}</div>
+                                <div className="flex flex-wrap gap-2 mt-1 p-2 border rounded-md">{PAKISTANI_SHOE_SIZES.map(s => <button type="button" key={s} onClick={() => handleMultiSelect('sizes', s)} className={`px-3 py-1 border rounded-full text-sm ${formData.sizes.includes(s) ? 'bg-brand-primary text-white' : ''}`}>{s}</button>)}</div>
                             </div>
                             {formData.colors.length > 0 && formData.sizes.length > 0 && (
                                 <div>
@@ -317,7 +382,7 @@ const AdminItems: React.FC = () => {
                                                 {formData.colors.map(c => (
                                                     <tr key={c} className="border-t">
                                                         <td className="p-2 font-medium border-r bg-gray-50">{c}</td>
-                                                        {formData.sizes.map(s => (<td key={s} className="p-1"><input type="number" value={formData.stock.find(v => v.color === c && v.size === s)?.quantity || 0} onChange={(e) => handleStockChange(c, s, parseInt(e.target.value))} className="w-16 p-1 text-center border rounded bg-white text-black"/></td>))}
+                                                        {formData.sizes.map(s => (<td key={s} className="p-1"><input type="text" inputMode="numeric" pattern="[0-9]*" value={formData.stock.find(v => v.color === c && v.size === s)?.quantity || 0} onChange={(e) => handleStockChange(c, s, parseInt(e.target.value))} className="w-16 p-1 text-center border rounded bg-white text-black"/></td>))}
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -340,8 +405,8 @@ const AdminItems: React.FC = () => {
                                 </div>
                              )}
                             <div className="flex justify-end space-x-4 pt-4">
-                                <button type="button" onClick={handleCloseModal} className="bg-gray-300 py-2 px-4 rounded-lg">Cancel</button>
-                                <button type="submit" className="bg-brand-text text-white py-2 px-4 rounded-lg">Save Item</button>
+                                <button type="button" onClick={handleCloseModal} className="bg-gray-300 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-400">Cancel</button>
+                                <button type="submit" className="bg-brand-primary text-white py-2 px-4 rounded-lg hover:bg-brand-primary-dark transition-colors">Save Item</button>
                             </div>
                         </form>
                     </div>
@@ -374,7 +439,7 @@ const AdminItems: React.FC = () => {
 
                                     {isGeneratingVideo && (
                                         <div className="text-center p-8">
-                                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-text mx-auto"></div>
+                                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-primary mx-auto"></div>
                                             <p className="mt-4 font-semibold">Generating your video...</p>
                                             <p className="text-sm text-gray-600 mt-2 h-4">{videoGenerationProgress}</p>
                                         </div>
@@ -397,14 +462,14 @@ const AdminItems: React.FC = () => {
                             )}
 
                             <div className="flex justify-end space-x-4 mt-6">
-                                <button type="button" onClick={handleCloseVideoModal} className="bg-gray-300 py-2 px-4 rounded-lg">Close</button>
+                                <button type="button" onClick={handleCloseVideoModal} className="bg-gray-300 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-400">Close</button>
                                 {apiKeySelected && !isGeneratingVideo && (
                                     generatedVideoUrl ? (
                                         <a href={generatedVideoUrl} download={`${productForAd.id}-ad.mp4`} className="bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700 flex items-center gap-2">
                                             <Icon name="download" className="w-5 h-5" /> Download Video
                                         </a>
                                     ) : (
-                                        <button onClick={handleGenerateVideo} className="bg-brand-text text-white font-bold py-2 px-4 rounded-lg hover:bg-opacity-90">Generate</button>
+                                        <button onClick={handleGenerateVideo} className="bg-brand-primary text-white font-bold py-2 px-4 rounded-lg hover:bg-brand-primary-dark transition-colors">Generate</button>
                                     )
                                 )}
                             </div>

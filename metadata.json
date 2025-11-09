@@ -1,5 +1,7 @@
 {
-  "requestFramePermissions": [],
-  "name": "",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "name": "Roxy Shoes E-Commerce",
   "description": ""
 }

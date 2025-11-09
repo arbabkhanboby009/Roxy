@@ -14,10 +14,17 @@
         theme: {
           extend: {
             colors: {
-              'brand-pink': '#FADADD',
-              'brand-dark-pink': '#E7C8C3',
-              'brand-text': '#5C3D46',
-              'brand-accent': '#A0D2DB',
+              'brand-blue': '#1a2a45',
+              'brand-blue-light': '#2a4268',
+              'brand-silver': '#c0c0c0',
+              'brand-silver-dark': '#a9a9a9',
+              'brand-text-light': '#e0e0e0',
+              'brand-primary': '#2563eb',
+              'brand-primary-dark': '#1d4ed8',
+              'brand-pink': '#ec4899',
+              'brand-dark-pink': '#be185d',
+              'brand-accent': '#ec4899',
+              'brand-text': '#1a2a45',
             },
             fontFamily: {
               'serif': ['Playfair Display', 'serif'],
@@ -28,6 +35,10 @@
       }
     </script>
     <style>
+      body {
+        background-color: #1a2a45;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Cg fill-rule='evenodd'%3E%3Cg fill='%232a4268' fill-opacity='0.4'%3E%3Cpath opacity='.5' d='M96 95h4v1h-4v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9zm-1 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-9-10h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm9-10v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-9-10h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm9-10v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-9-10h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm9-10v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-9-10h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9z'/%3E%3Cpath d='M6 5V0h1v5h4v1H7v4H6V6H2V5h4z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+      }
       .mode-toggle-switch {
         position: relative;
         display: inline-block;
@@ -65,15 +76,61 @@
         border-radius: 50%;
       }
       input:checked + .mode-toggle-slider {
-        background-color: #5C3D46; /* brand-text color */
+        background-color: #1a2a45; /* brand-blue */
       }
       input:focus + .mode-toggle-slider {
-        box-shadow: 0 0 1px #5C3D46;
+        box-shadow: 0 0 1px #1a2a45;
       }
       input:checked + .mode-toggle-slider:before {
         -webkit-transform: translateX(26px);
         -ms-transform: translateX(26px);
         transform: translateX(26px);
+      }
+       @media print {
+          .no-print { display: none !important; }
+          body * { visibility: hidden; }
+          .printable-area, .printable-area * { visibility: visible; }
+          .printable-area {
+              position: absolute !important;
+              left: 0 !important;
+              top: 0 !important;
+              width: 100% !important;
+              height: auto !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              border: none !important;
+              box-shadow: none !important;
+              overflow: visible !important;
+          }
+          .printable-content {
+              height: auto !important;
+              overflow: visible !important;
+          }
+          .printable-header {
+              position: fixed;
+              top: 0;
+              left: 0;
+              right: 0;
+              padding: 1rem;
+              background: white !important;
+              border-bottom: 1px solid #e5e7eb;
+              z-index: 1000;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+          }
+          .printable-header-placeholder {
+              height: 120px;
+          }
+          @page {
+              size: A4;
+              margin: 1in;
+          }
+          table thead {
+              display: table-header-group;
+          }
+          h1, h2, h3, p, table, tr {
+              page-break-inside: avoid;
+          }
       }
     </style>
   <script type="importmap">

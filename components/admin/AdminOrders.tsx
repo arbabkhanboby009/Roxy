@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, KeyboardEvent } from 'react';
 import { useStore } from '../../hooks/useStore';
 import type { Order, CartItem, Product } from '../../types';
 import { OrderStatus, OrderType, PaymentMethod, TransactionMethod, TransactionType } from '../../types';
@@ -15,6 +15,24 @@ const AddShopOrderModal: React.FC<{onClose: () => void, onAdd: (order: Omit<Orde
     const [selectedColor, setSelectedColor] = useState('');
     const [selectedSize, setSelectedSize] = useState('');
     const [quantity, setQuantity] = useState(1);
+    
+    const fullNameRef = useRef<HTMLInputElement>(null);
+    const mobileRef = useRef<HTMLInputElement>(null);
+    const addressRef = useRef<HTMLInputElement>(null);
+    const emailRef = useRef<HTMLInputElement>(null);
+    const searchRef = useRef<HTMLInputElement>(null);
+    
+    const inputRefs = [fullNameRef, mobileRef, addressRef, emailRef, searchRef];
+
+    const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>, index: number) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const nextInput = inputRefs[index + 1];
+            if (nextInput?.current) {
+                nextInput.current.focus();
+            }
+        }
+    };
 
     const searchResults = useMemo(() => {
         if (!searchTerm) return [];
@@ -72,36 +90,33 @@ const AddShopOrderModal: React.FC<{onClose: () => void, onAdd: (order: Omit<Orde
         onClose();
     };
 
-    const inputClass = "mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-black focus:outline-none focus:ring-brand-dark-pink focus:border-brand-dark-pink";
-    
-    const renderField = (label: string, name: keyof typeof customer, type: string = 'text') => (
-        <div>
-            <label htmlFor={name} className="block text-sm font-medium text-gray-700">{label}</label>
-            <input
-                id={name}
-                name={name}
-                type={type}
-                value={customer[name]}
-                onChange={e => setCustomer({...customer, [name]: e.target.value})}
-                className={inputClass}
-                required={name === 'fullName' || name === 'mobile'}
-            />
-        </div>
-    );
+    const inputClass = "mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-black focus:outline-none focus:ring-brand-primary-dark focus:border-brand-primary-dark";
     
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
             <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
                 <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="p-6">
-                    <h2 className="text-2xl font-bold mb-4 text-brand-text">Add In-Shop Order</h2>
+                    <h2 className="text-2xl font-bold mb-4 text-gray-800">Add In-Shop Order</h2>
                     
                     <fieldset className="border p-4 rounded-md mb-4">
                         <legend className="px-2 font-semibold text-gray-700">Customer Details</legend>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {renderField("Full Name", "fullName")}
-                            {renderField("Mobile Number", "mobile", "tel")}
-                            {renderField("Address", "address")}
-                            {renderField("Email", "email", "email")}
+                            <div>
+                                <label htmlFor="fullName" className="block text-sm font-medium text-gray-700">Full Name</label>
+                                <input id="fullName" name="fullName" type="text" value={customer.fullName} onChange={e => setCustomer({...customer, fullName: e.target.value})} ref={fullNameRef} onKeyDown={e => handleKeyDown(e, 0)} className={inputClass} required />
+                            </div>
+                            <div>
+                                <label htmlFor="mobile" className="block text-sm font-medium text-gray-700">Mobile Number</label>
+                                <input id="mobile" name="mobile" type="tel" value={customer.mobile} onChange={e => setCustomer({...customer, mobile: e.target.value})} ref={mobileRef} onKeyDown={e => handleKeyDown(e, 1)} className={inputClass} required />
+                            </div>
+                            <div>
+                                <label htmlFor="address" className="block text-sm font-medium text-gray-700">Address</label>
+                                <input id="address" name="address" type="text" value={customer.address} onChange={e => setCustomer({...customer, address: e.target.value})} ref={addressRef} onKeyDown={e => handleKeyDown(e, 2)} className={inputClass} />
+                            </div>
+                            <div>
+                                <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email</label>
+                                <input id="email" name="email" type="email" value={customer.email} onChange={e => setCustomer({...customer, email: e.target.value})} ref={emailRef} onKeyDown={e => handleKeyDown(e, 3)} className={inputClass} />
+                            </div>
                         </div>
                     </fieldset>
 
@@ -109,7 +124,7 @@ const AddShopOrderModal: React.FC<{onClose: () => void, onAdd: (order: Omit<Orde
                         <legend className="px-2 font-semibold text-gray-700">Order Items</legend>
                         <div className="relative mb-2">
                             <label className="block text-sm font-medium text-gray-700">Search Item (by ID or Name)</label>
-                            <input type="text" placeholder="e.g., ROXXY-001 or Star Sneakers" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className={inputClass} />
+                            <input type="text" placeholder="e.g., ROXXY-001 or Star Sneakers" value={searchTerm} ref={searchRef} onChange={e => setSearchTerm(e.target.value)} className={inputClass} />
                             {searchResults.length > 0 && searchTerm && (
                                 <ul className="absolute z-10 w-full bg-white border border-gray-300 rounded-md mt-1 max-h-40 overflow-y-auto">
                                     {searchResults.map(p => <li key={p.id} onClick={() => handleSelectProduct(p)} className="px-3 py-2 cursor-pointer hover:bg-gray-100">{p.id} - {p.name}</li> )}
@@ -133,7 +148,7 @@ const AddShopOrderModal: React.FC<{onClose: () => void, onAdd: (order: Omit<Orde
                                 </div>
                                 <div>
                                     <label className="text-sm">Quantity</label>
-                                    <input type="number" min="1" value={quantity} onChange={e => setQuantity(parseInt(e.target.value))} className={`${inputClass} mt-1`} />
+                                    <input type="text" inputMode="numeric" pattern="[0-9]*" value={quantity} onChange={e => setQuantity(parseInt(e.target.value) > 0 ? parseInt(e.target.value) : 1)} className={`${inputClass} mt-1`} />
                                 </div>
                                 <button type="button" onClick={handleAddItem} className="bg-blue-500 text-white px-4 py-2 rounded h-fit">Add Item</button>
                             </div>
@@ -150,8 +165,8 @@ const AddShopOrderModal: React.FC<{onClose: () => void, onAdd: (order: Omit<Orde
                     </div>
 
                     <div className="flex justify-end space-x-4 mt-6">
-                        <button type="button" onClick={onClose} className="bg-gray-300 py-2 px-4 rounded-lg">Cancel</button>
-                        <button type="submit" className="bg-brand-text text-white py-2 px-4 rounded-lg">Generate Invoice & Save Order</button>
+                        <button type="button" onClick={onClose} className="bg-gray-300 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-400">Cancel</button>
+                        <button type="submit" className="bg-brand-primary text-white py-2 px-4 rounded-lg hover:bg-brand-primary-dark transition-colors">Generate Invoice & Save Order</button>
                     </div>
                 </form>
             </div>
@@ -168,7 +183,7 @@ const PaymentConfirmationModal: React.FC<{ order: Order; onClose: () => void; on
         onClose();
     };
     
-    const inputClass = "mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-black focus:outline-none focus:ring-brand-dark-pink focus:border-brand-dark-pink";
+    const inputClass = "mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-black focus:outline-none focus:ring-brand-primary-dark focus:border-brand-primary-dark";
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 z-[60] flex justify-center items-center p-4">
@@ -190,7 +205,7 @@ const PaymentConfirmationModal: React.FC<{ order: Order; onClose: () => void; on
                     </div>
                 </div>
                 <div className="flex justify-end space-x-4 mt-6">
-                    <button type="button" onClick={onClose} className="bg-gray-300 py-2 px-4 rounded-lg">Cancel</button>
+                    <button type="button" onClick={onClose} className="bg-gray-300 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-400">Cancel</button>
                     <button type="button" onClick={handleSubmit} className="bg-green-600 text-white py-2 px-4 rounded-lg">Confirm & Record Payment</button>
                 </div>
             </div>
@@ -199,24 +214,46 @@ const PaymentConfirmationModal: React.FC<{ order: Order; onClose: () => void; on
 };
 
 const AdminOrderHistory: React.FC = () => {
-    const { orders, updateOrderStatus, addShopOrder, addTransaction, currentUser } = useStore();
+    const { orders, updateOrderStatus, addShopOrder, addTransaction } = useStore();
     const [viewingOrder, setViewingOrder] = useState<Order | null>(null);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isInvoiceVisible, setIsInvoiceVisible] = useState(false);
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-    const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
-    const [filterType, setFilterType] = useState<'All' | 'Online' | 'In-Shop'>('All');
+    
+    const [filterStatus, setFilterStatus] = useState<OrderStatus | 'All'>('All');
+    const [filterPayment, setFilterPayment] = useState<PaymentMethod | 'All'>('All');
+    const [filterDateFrom, setFilterDateFrom] = useState('');
+    const [filterDateTo, setFilterDateTo] = useState('');
+
+    const resetFilters = () => {
+        setFilterStatus('All');
+        setFilterPayment('All');
+        setFilterDateFrom('');
+        setFilterDateTo('');
+    };
 
     const filteredAndSortedOrders = useMemo(() => {
-        let sortableItems = [...orders];
-        if (filterType !== 'All') sortableItems = sortableItems.filter(order => order.type === filterType);
-        sortableItems.sort((a, b) => {
-            const valA = sortConfig.key === 'date' ? b.createdAt.getTime() : a.grandTotal;
-            const valB = sortConfig.key === 'date' ? a.createdAt.getTime() : b.grandTotal;
-            return sortConfig.direction === 'asc' ? valA - valB : valB - valA;
-        });
-        return sortableItems;
-    }, [orders, sortConfig, filterType]);
+        let filtered = [...orders];
+
+        if (filterStatus !== 'All') {
+            filtered = filtered.filter(order => order.status === filterStatus);
+        }
+        if (filterPayment !== 'All') {
+            filtered = filtered.filter(order => order.paymentMethod === filterPayment);
+        }
+        if (filterDateFrom) {
+            const fromDate = new Date(filterDateFrom);
+            fromDate.setHours(0, 0, 0, 0);
+            filtered = filtered.filter(order => order.createdAt >= fromDate);
+        }
+        if (filterDateTo) {
+            const toDate = new Date(filterDateTo);
+            toDate.setHours(23, 59, 59, 999);
+            filtered = filtered.filter(order => order.createdAt <= toDate);
+        }
+
+        return filtered.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    }, [orders, filterStatus, filterPayment, filterDateFrom, filterDateTo]);
     
     const getStatusColor = (status: OrderStatus) => {
         switch (status) {
@@ -257,14 +294,40 @@ const AdminOrderHistory: React.FC = () => {
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-3xl font-bold text-gray-800">Order History</h1>
                  <div className="flex items-center gap-4">
-                    <select value={filterType} onChange={(e) => setFilterType(e.target.value as any)} className="appearance-none bg-white border border-gray-300 rounded-md py-2 pl-3 pr-8 text-sm text-black">
-                        <option value="All">All Orders</option>
-                        <option value="Online">Online</option>
-                        <option value="In-Shop">In-Shop</option>
-                    </select>
-                    <button onClick={() => setIsAddModalOpen(true)} className="bg-brand-text text-white font-bold py-2 px-4 rounded-lg hover:bg-opacity-90 flex items-center"><Icon name="plus" className="w-5 h-5 mr-2" /> Add Shop Order</button>
+                    <button onClick={() => setIsAddModalOpen(true)} className="bg-brand-primary text-white font-bold py-2 px-4 rounded-lg hover:bg-brand-primary-dark transition-colors flex items-center"><Icon name="plus" className="w-5 h-5 mr-2" /> Add Shop Order</button>
                 </div>
             </div>
+
+             <div className="bg-white p-4 rounded-lg shadow mb-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                    <div>
+                        <label className="text-xs font-semibold text-gray-600">From Date</label>
+                        <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} className="w-full border p-2 rounded bg-white text-black border-gray-300 text-sm mt-1" />
+                    </div>
+                    <div>
+                        <label className="text-xs font-semibold text-gray-600">To Date</label>
+                        <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} className="w-full border p-2 rounded bg-white text-black border-gray-300 text-sm mt-1" />
+                    </div>
+                    <div>
+                        <label className="text-xs font-semibold text-gray-600">Status</label>
+                        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as any)} className="w-full border p-2 rounded bg-white text-black border-gray-300 text-sm mt-1">
+                            <option value="All">All Statuses</option>
+                            {Object.values(OrderStatus).map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="text-xs font-semibold text-gray-600">Payment</label>
+                        <select value={filterPayment} onChange={e => setFilterPayment(e.target.value as any)} className="w-full border p-2 rounded bg-white text-black border-gray-300 text-sm mt-1">
+                            <option value="All">All Methods</option>
+                            {Object.values(PaymentMethod).map(p => <option key={p} value={p}>{p}</option>)}
+                        </select>
+                    </div>
+                    <div className="flex items-end">
+                        <button onClick={resetFilters} className="w-full bg-gray-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-600 text-sm">Reset Filters</button>
+                    </div>
+                </div>
+            </div>
+
              <div className="bg-white rounded-lg shadow overflow-x-auto">
                 <table className="w-full text-sm text-left text-gray-500">
                     <thead className="text-xs text-gray-700 uppercase bg-gray-50">
@@ -345,8 +408,23 @@ const AdminOrderHistory: React.FC = () => {
                         </div>
 
                         <div className="flex justify-between items-center mt-6">
-                            <button onClick={() => setIsInvoiceVisible(true)} className="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700">View Invoice</button>
-                            <button onClick={() => setViewingOrder(null)} className="bg-gray-300 py-2 px-4 rounded-lg">Close</button>
+                             <div>
+                                <button onClick={() => setIsInvoiceVisible(true)} className="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700">View Invoice</button>
+                                {/* FIX: Only allow cancellation if order is not delivered or cancelled */}
+                                {!['Delivered', 'Cancelled'].includes(viewingOrder.status) && (
+                                    <button 
+                                        onClick={() => {
+                                            if (window.confirm(`Are you sure you want to cancel this order? This action will restock the items.`)) {
+                                                updateOrderStatus(viewingOrder.id, OrderStatus.Cancelled);
+                                                setViewingOrder(prev => prev ? { ...prev, status: OrderStatus.Cancelled } : null);
+                                            }
+                                        }}
+                                        className="bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 ml-2">
+                                        Cancel Order
+                                    </button>
+                                )}
+                            </div>
+                            <button onClick={() => setViewingOrder(null)} className="bg-gray-300 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-400">Close</button>
                         </div>
                     </div>
                 </div>

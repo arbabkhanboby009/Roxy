@@ -10,6 +10,8 @@ export interface Product {
   name: string;
   description: string;
   price: number;
+  salePrice?: number;
+  isFeatured?: boolean;
   category: string;
   subcategory: string;
   colors: string[];
@@ -22,6 +24,7 @@ export interface CartItem {
   id: string;
   name: string;
   price: number;
+  salePrice?: number;
   quantity: number;
   selectedSize: string;
   selectedColor: string;
